@@ -28,13 +28,32 @@ class Record:
 
 @dataclass
 class DetectionResult:
-    """检测结果，检测服务器返回的结论"""
+    """检测结果，存储到 SQLite 的 `detection_results` 表
 
+    由 runtime 把 `Record`（来自 proxy/recorder）+ 检测服务器响应合并而成。
+    """
+
+    # 来自 Record（用于 SQL 关联与查询）
     record_id: str
-    detection_status: str
-    risk_level: str | None
-    detection_detail: dict[str, Any] | None
-    detected_at: str
+    service: str
+    endpoint_type: str
+    upstream: str
+    timestamp: str
+    status_code: int
+    elapsed_ms: int
+
+    # 来自 Record（可选）
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    finish_reason: str | None = None
+    error: str | None = None
+
+    # 来自检测服务器
+    detection_status: str = "clean"  # clean / suspicious / violation / error
+    risk_level: str | None = None  # low / medium / high / critical
+    detection_detail: dict[str, Any] | None = None  # 完整检测响应
+    detected_at: str = ""  # ISO8601，检测服务器返回时间
 
 
 @dataclass

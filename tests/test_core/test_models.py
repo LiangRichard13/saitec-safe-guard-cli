@@ -149,15 +149,22 @@ def test_redact_headers_empty() -> None:
 
 
 def test_detection_result_construction() -> None:
-    """DetectionResult 构造"""
+    """DetectionResult 构造（含 Record 字段 + 检测字段）"""
     r = DetectionResult(
         record_id="abc",
+        service="svc",
+        endpoint_type="openai-chat-completions",
+        upstream="https://api.openai.com",
+        timestamp="2026-08-14T12:00:00Z",
+        status_code=200,
+        elapsed_ms=812,
         detection_status="clean",
         risk_level="low",
         detection_detail=None,
-        detected_at="2026-08-14T12:00:00Z",
+        detected_at="2026-08-14T12:00:01Z",
     )
     assert r.detection_status == "clean"
+    assert r.elapsed_ms == 812
 
 
 def test_config_error_construction() -> None:
