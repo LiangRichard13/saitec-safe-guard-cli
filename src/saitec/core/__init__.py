@@ -17,6 +17,7 @@ from .models import (
     ConfigErrorCode,
     ConfigSource,
     ConfigSources,
+    ConfigValidationError,
     DetectionResult,
     DetectorConfig,
     EndpointSpec,
@@ -44,6 +45,7 @@ __all__ = [
     "ConfigError",
     "ConfigSource",
     "ConfigSources",
+    "ConfigValidationError",
     # config
     "load_config_json",
     "apply_env_overrides",

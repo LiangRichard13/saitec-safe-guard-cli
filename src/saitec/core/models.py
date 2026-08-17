@@ -109,3 +109,11 @@ class ConfigSources:
 
     sources: dict[str, ConfigSource] = field(default_factory=dict)
     env_vars: dict[str, str] = field(default_factory=dict)
+
+
+class ConfigValidationError(Exception):
+    """配置校验失败（包含错误列表）"""
+
+    def __init__(self, errors: list[ConfigError]) -> None:
+        super().__init__(f"config validation failed: {len(errors)} error(s)")
+        self.errors = errors
