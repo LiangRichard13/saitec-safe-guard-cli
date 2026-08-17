@@ -1,16 +1,23 @@
 """Reporter — Layer 2
 
-HTTP POST 批量上报到检测服务器，含错误类型区分（AUTH / PAYLOAD / SERVER）。
+HTTP POST 批量上报到检测服务器，带 `X-API-Key` 认证。
 
-⚠️ 骨架阶段：接口已定义，内部逻辑待 Phase D 落地。
+错误分类（runtime 据此决策重试策略）：
+- `AUTH`：401/403（X-API-Key 失效）→ 停止重试
+- `PAYLOAD`：4xx 其他（请求体问题）→ 继续重试
+- `SERVER`：5xx / 网络错误 / 超时 → 继续重试 + 指数退避
 """
 from __future__ import annotations
 
+import asyncio
+import dataclasses
+from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 
 import aiohttp
 
-from ..core.models import DetectorConfig, DetectionResult, Record
+from ..core.models import DetectionResult, DetectorConfig, Record
 
 
 class ReportErrorKind(str, Enum):
@@ -37,10 +44,113 @@ class Reporter:
         self,
         config: DetectorConfig,
         client: aiohttp.ClientSession,
+        timeout_sec: float = 30.0,
     ) -> None:
         self._config = config
         self._client = client
+        self._timeout_sec = timeout_sec
 
     async def report(self, batch: list[Record]) -> list[DetectionResult]:
-        """批量上报，返回检测结果"""
-        raise NotImplementedError("Phase D 实现")
+        """批量上报，返回检测结果
+
+        检测服务器响应格式（约定）：
+        ```json
+        {
+            "results": [
+                {
+                    "record_id": "...",
+                    "detection_status": "clean" | "suspicious" | "violation" | "error",
+                    "risk_level": "low" | "medium" | "high" | "critical" | null,
+                    "detection_detail": {...},
+                    "detected_at": "2026-08-14T..."
+                }
+            ]
+        }
+        ```
+
+        Raises:
+            ReportError: 上报失败（带 kind 分类）
+        """
+        if not batch:
+            return []
+
+        payload = {
+            "batch": [dataclasses.asdict(r) for r in batch],
+        }
+        url = self._config.url.rstrip("/") + "/detect"
+        headers = {"X-API-Key": self._config.api_key}
+
+        try:
+            async with self._client.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=self._timeout_sec),
+            ) as resp:
+                if resp.status in (401, 403):
+                    raise ReportError(
+                        ReportErrorKind.AUTH,
+                        f"auth failed ({resp.status})",
+                    )
+                if 400 <= resp.status < 500:
+                    body = await resp.text()
+                    raise ReportError(
+                        ReportErrorKind.PAYLOAD,
+                        f"payload error ({resp.status}): {body[:200]}",
+                    )
+                if resp.status >= 500:
+                    raise ReportError(
+                        ReportErrorKind.SERVER,
+                        f"server error ({resp.status})",
+                    )
+                data = await resp.json()
+        except aiohttp.ClientError as e:
+            raise ReportError(ReportErrorKind.SERVER, f"network error: {e}") from e
+        except asyncio.TimeoutError as e:
+            raise ReportError(
+                ReportErrorKind.SERVER, f"timeout: {e}"
+            ) from e
+
+        return self._parse_response(batch, data)
+
+    @staticmethod
+    def _parse_response(
+        batch: list[Record], data: dict[str, Any]
+    ) -> list[DetectionResult]:
+        """解析检测服务器响应，与 batch 关联成 DetectionResult"""
+        items = data.get("results", [])
+        if not isinstance(items, list):
+            return []
+        by_id = {r.record_id: r for r in batch}
+        results: list[DetectionResult] = []
+        for item in items:
+            rid = item.get("record_id")
+            if rid is None or rid not in by_id:
+                continue
+            r = by_id[rid]
+            detected_at = item.get(
+                "detected_at", datetime.now(timezone.utc).isoformat()
+            )
+            results.append(
+                DetectionResult(
+                    record_id=r.record_id,
+                    service=r.service,
+                    endpoint_type=r.endpoint_type,
+                    upstream=r.upstream,
+                    timestamp=r.timestamp,
+                    status_code=r.status_code,
+                    elapsed_ms=r.elapsed_ms,
+                    model=r.request.get("model"),
+                    prompt_tokens=(r.response.get("usage") or {}).get("prompt_tokens"),
+                    completion_tokens=(r.response.get("usage") or {}).get(
+                        "completion_tokens"
+                    ),
+                    finish_reason=r.response.get("finish_reason"),
+                    error=r.error,
+                    detection_status=item.get("detection_status", "clean"),
+                    risk_level=item.get("risk_level"),
+                    detection_detail=item.get("detection_detail"),
+                    detected_at=detected_at,
+                )
+            )
+        return results
