@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saitec-safe-guard-cli"
+version = "0.1.0"
+description = "Reverse-proxy CLI for LLM API traffic monitoring and security detection"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "SaITec" }]
+keywords = ["llm", "reverse-proxy", "security", "monitoring"]
+
+dependencies = [
+    "aiohttp>=3.9",
+    "typer>=0.12",
+    "platformdirs>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.23",
+    "mypy>=1.7",
+]
+
+[project.scripts]
+safe-guard = "saitec.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true

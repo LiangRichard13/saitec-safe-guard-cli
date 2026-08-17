@@ -1,0 +1,1 @@
+"""test_adapters — Layer 3 adapters 测试"""
