@@ -1,4 +1,4 @@
-"""stop — 优雅停止服务（SIGTERM → SIGKILL 兜底）"""
+"""stop — 优雅停止服务（SIGTERM → SIGKILL 兜底，Windows 用 stop_flag 文件）"""
 from __future__ import annotations
 
 import os
@@ -18,12 +18,27 @@ from .._common import (
     read_pid,
     remove_pid,
 )
+from .._serve import STOP_FLAG_NAME
 
 
-def _terminate(pid: int, timeout: float) -> bool:
-    """发送终止信号，等待优雅退出；超时则强杀"""
+def _stop_flag(config_path: Path) -> Path:
+    return config_path.parent / STOP_FLAG_NAME
+
+
+def _terminate(pid: int, timeout: float, config_path: Path) -> bool:
+    """发送终止信号，等待优雅退出；超时则强杀
+
+    Windows：先写 stop.flag 让 _serve.py 优雅关闭；超时再 taskkill /F。
+    """
     if os.name == "nt":
-        # Windows：先发 CTRL_BREAK（不友好），直接 taskkill
+        # P1-11：写 stop flag 触发 _serve 的 watch task 优雅关闭
+        _stop_flag(config_path).touch()
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not is_pid_alive(pid):
+                return True
+            time.sleep(0.2)
+        # 兜底强杀
         try:
             subprocess.run(
                 ["taskkill", "/PID", str(pid), "/T", "/F"],
@@ -33,17 +48,17 @@ def _terminate(pid: int, timeout: float) -> bool:
         except subprocess.TimeoutExpired:
             pass
         return True
+
+    # Unix: SIGTERM → SIGKILL
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
         return True
-    # 等待优雅退出
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not is_pid_alive(pid):
             return True
         time.sleep(0.2)
-    # 超时 → SIGKILL
     try:
         os.kill(pid, signal.SIGKILL)
     except ProcessLookupError:
@@ -57,7 +72,10 @@ def stop_cmd(
     json_output: bool = typer.Option(False, "--json"),
     timeout: int = typer.Option(10, "--timeout", help="等待优雅关闭的超时（秒）"),
 ) -> None:
-    """通过 PID 文件发送 SIGTERM，等待超时后 SIGKILL 兜底"""
+    """通过 PID 文件发送 SIGTERM，等待超时后 SIGKILL 兜底
+
+    Windows 用 stop.flag 文件替代（_serve.py 轮询）。
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     pid = read_pid(path)
 
@@ -74,7 +92,8 @@ def stop_cmd(
              exit_code=EXIT_RUNTIME_ERROR)
         return
 
-    _terminate(pid, timeout)
+    _terminate(pid, timeout, path)
     remove_pid(path)
+    _stop_flag(path).unlink(missing_ok=True)
     emit(json_output=json_output,
          data={"stopped": True, "pid": pid, "timeout_sec": timeout})

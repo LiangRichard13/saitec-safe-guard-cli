@@ -124,7 +124,7 @@ def load_config_json(path: Path) -> AppConfig:
         url=detector_raw["url"],
         api_key=detector_raw["api_key"],
         report_interval_sec=detector_raw.get("report_interval_sec", 60),
-        batch_size=detector_raw.get("batch_size", 100),
+        batch_size=detector_raw.get("batch_size", 500),
         max_queue_size=detector_raw.get("max_queue_size", 10000),
     )
     services = [

@@ -74,7 +74,7 @@ class DetectorConfig:
     url: str
     api_key: str
     report_interval_sec: int = 60
-    batch_size: int = 100
+    batch_size: int = 500  # P0-8: 100 → 500（10rps 时 100/min 跟不上）
     max_queue_size: int = 10000
 
 

@@ -155,3 +155,75 @@ def test_partial_usage_finalize_returns_none() -> None:
     assert result["usage"] is not None
     assert result["usage"]["prompt_tokens"] == 5
     assert result["usage"]["completion_tokens"] is None
+
+
+# ============================================================
+# 跨 chunk 行缓冲（P0-1）
+# ============================================================
+
+
+def test_event_line_split_across_chunks() -> None:
+    """event: 行被 TCP 分片切成两半"""
+    a = AnthropicMessagesAdapter()
+    a.on_stream_chunk(b"event: content_block_del")
+    a.on_stream_chunk(
+        b'ta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"across"}}\n\n'
+    )
+    assert a.finalize()["content"] == "across"
+
+
+def test_data_line_split_across_chunks() -> None:
+    """data: 行的 JSON 被切成两半"""
+    a = AnthropicMessagesAdapter()
+    a.on_stream_chunk(
+        b'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","'
+    )
+    a.on_stream_chunk(b'text":"split"}}\n\n')
+    assert a.finalize()["content"] == "split"
+
+
+def test_event_and_data_both_split() -> None:
+    """event: 行和紧随的 data: 行都被拆开"""
+    a = AnthropicMessagesAdapter()
+    a.on_stream_chunk(b"event: message_")
+    a.on_stream_chunk(
+        b'start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":9}'
+    )
+    a.on_stream_chunk(b"}}\n\n")
+    result = a.finalize()
+    assert result["usage"]["prompt_tokens"] == 9
+
+
+def test_non_stream_response_parsed() -> None:
+    """非流式响应（content[].text）应被解析（P0-2 修复）"""
+    a = AnthropicMessagesAdapter()
+    body = json.dumps(
+        {
+            "id": "msg_1",
+            "type": "message",
+            "content": [
+                {"type": "text", "text": "Hello anthropic"},
+            ],
+            "usage": {"input_tokens": 8, "output_tokens": 4},
+            "stop_reason": "end_turn",
+        }
+    ).encode()
+    a.on_stream_chunk(body)
+    result = a.finalize()
+    assert result["content"] == "Hello anthropic"
+    assert result["finish_reason"] == "end_turn"
+    assert result["usage"]["prompt_tokens"] == 8
+    assert result["usage"]["completion_tokens"] == 4
+    assert a.is_terminal()
+
+
+def test_anthropic_sse_payload_not_misdetected_as_bare_json() -> None:
+    """SSE 的 data: payload 单独成 chunk 时不应走裸 JSON 快速路径"""
+    a = AnthropicMessagesAdapter()
+    # 模拟 TCP 把 `data: ` 与 payload 分开（payload 以 { 开头）
+    a.on_stream_chunk(b"data: ")
+    a.on_stream_chunk(
+        b'{"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}\n\n'
+    )
+    result = a.finalize()
+    assert result["content"] == "ok"

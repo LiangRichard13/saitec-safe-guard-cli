@@ -66,18 +66,27 @@ class Recorder:
             )
 
     async def flush(self) -> list[Record]:
-        """异步从内存队列取一拨出 + 同步落盘到 JSONL
+        """异步从内存队列取一拨出 + **先落盘**再出队（P0-3：防写失败丢数据）
 
+        先写 JSONL，**成功**后从队列移除；写失败（磁盘满 / 权限）记录保留在
+        队列中被丢弃的最旧记录，下次 flush 重试。
         返回的 batch 由调用方（runtime）提交给 reporter。
-        剩余不足 `batch_size` 的也一并返回，方便 drain。
         """
         async with self._lock:
             if not self._queue:
                 return []
             batch = self._queue[: self._batch_size]
-            self._queue = self._queue[self._batch_size :]
-        # 落盘（不持有锁，避免阻塞 enqueue）
-        self._append_to_jsonl(batch)
+        # 先落盘（锁外写，避免阻塞 enqueue）；失败则记录仍在队列里
+        try:
+            self._append_to_jsonl(batch)
+        except OSError as e:
+            logger.error(
+                "JSONL 写入失败，记录保留在队列稍后重试: %s", e
+            )
+            return []
+        # 落盘成功后才出队
+        async with self._lock:
+            self._queue = self._queue[len(batch):]
         return batch
 
     async def aclose(self) -> None:

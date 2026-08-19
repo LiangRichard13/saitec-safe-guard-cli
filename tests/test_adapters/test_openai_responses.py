@@ -110,3 +110,40 @@ def test_finalize_no_chunks() -> None:
     assert result["content"] == ""
     assert result["finish_reason"] is None
     assert result["usage"] is None
+
+
+def test_half_line_split_across_chunks() -> None:
+    """data: 行的 JSON 被 TCP 分片切成两半（P0-1）"""
+    a = OpenAIResponsesAdapter()
+    a.on_stream_chunk(
+        b'data: {"type":"response.output_text.delta","del'
+    )
+    a.on_stream_chunk(b'ta":"Hello"}\n\n')
+    assert a.finalize()["content"] == "Hello"
+
+
+def test_non_stream_response_parsed() -> None:
+    """非流式响应（output[].content[].text）应被解析（P0-2 修复）"""
+    a = OpenAIResponsesAdapter()
+    body = json.dumps(
+        {
+            "id": "resp_1",
+            "object": "response",
+            "status": "completed",
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {"type": "output_text", "text": "Hello response"},
+                    ],
+                }
+            ],
+            "usage": {"input_tokens": 10, "output_tokens": 3},
+        }
+    ).encode()
+    a.on_stream_chunk(body)
+    result = a.finalize()
+    assert result["content"] == "Hello response"
+    assert result["finish_reason"] == "completed"
+    assert result["usage"]["prompt_tokens"] == 10
+    assert a.is_terminal()

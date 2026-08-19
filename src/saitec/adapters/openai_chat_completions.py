@@ -37,33 +37,48 @@ class OpenAIChatCompletionsAdapter(Adapter):
         }
 
     def on_stream_chunk(self, chunk: bytes) -> None:
-        """累积一个 SSE chunk
+        """累积一个 SSE chunk（跨 chunk 行缓冲，见基类 _consume_chunk）
 
-        chunk 可能含多个 data: 行（甚至跨 event 边界），逐行处理：
+        chunk 可能含多个 `data:` 行：逐行处理：
         - `data: {...}` → 累积 delta / usage / finish_reason
         - `data: [DONE]` → 标记终止
         - 其他行（event: / 空行 / 注释）→ 跳过
+        - 裸 JSON（非流式响应整段）→ 走 _accumulate_non_stream
         """
         try:
-            text = chunk.decode("utf-8", errors="replace")
+            # 非流式快速路径：整段就是 JSON（无 data: 前缀）
+            bare = self._try_bare_json(chunk)
+            if bare is not None:
+                self._accumulate_non_stream(bare)
+                return
+            for line in self._consume_chunk(chunk):
+                self._process_line(line)
         except Exception:
             self._error_chunk_count += 1
-            return
 
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            if not line or not line.startswith("data:"):
-                continue
+    def _process_line(self, raw_line: str) -> None:
+        line = raw_line.strip()
+        if not line:
+            return
+        if line.startswith("data:"):
             payload = line[len("data:"):].strip()
             if payload == "[DONE]":
                 self._terminal = True
-                continue
+                return
             try:
                 obj = json.loads(payload)
             except json.JSONDecodeError:
                 self._error_chunk_count += 1
-                continue
+                return
             self._accumulate(obj)
+            return
+        # 非流式响应：裸 JSON（无 data: 前缀），整段喂给 adapter
+        if line.startswith("{"):
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                return
+            self._accumulate_non_stream(obj)
 
     def _accumulate(self, obj: dict[str, Any]) -> None:
         # choices 累积 content + finish_reason
@@ -86,8 +101,33 @@ class OpenAIChatCompletionsAdapter(Adapter):
                 "total_tokens": usage.get("total_tokens"),
             }
 
+    def _accumulate_non_stream(self, obj: dict[str, Any]) -> None:
+        """非流式响应（choices[].message.content）"""
+        for choice in obj.get("choices", []) or []:
+            message = choice.get("message") or {}
+            content = message.get("content")
+            if content:
+                self._content += content
+            fr = choice.get("finish_reason")
+            if fr:
+                self._finish_reason = fr
+        usage = obj.get("usage")
+        if usage:
+            self._usage = {
+                "prompt_tokens": usage.get("prompt_tokens"),
+                "completion_tokens": usage.get("completion_tokens"),
+                "total_tokens": usage.get("total_tokens"),
+            }
+        if obj.get("choices") or obj.get("usage"):
+            self._terminal = True  # 非流式响应天然终止
+
     def finalize(self) -> dict[str, Any]:
-        """返回 `{content, finish_reason, usage, raw}`"""
+        """返回 `{content, finish_reason, usage, raw}`
+
+        先处理缓冲中残留的最后一个不完整行（EOF 时没有换行）。
+        """
+        for line in self._drain_buffer():
+            self._process_line(line)
         return {
             "content": self._content,
             "finish_reason": self._finish_reason,

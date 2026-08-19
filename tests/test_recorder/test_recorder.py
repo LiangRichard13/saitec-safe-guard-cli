@@ -150,3 +150,37 @@ async def test_jsonl_filename_uses_date(tmp_path: Path) -> None:
     assert len(files) == 1
     # 文件名形如 records-YYYY-MM-DD.jsonl
     assert re.match(r"records-\d{4}-\d{2}-\d{2}\.jsonl", files[0].name)
+
+
+# ============================================================
+# P0-3：写失败时记录保留（先落盘后出队）
+# ============================================================
+
+
+async def test_flush_write_failure_keeps_records(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """JSONL 写失败 → flush 返回 [] 且记录仍在队列（不丢）"""
+    r = Recorder(tmp_path, batch_size=3)
+    for i in range(1, 4):
+        r.enqueue(_make_record(i))
+    assert r.queue_depth() == 3
+
+    # 模拟写失败（磁盘满 / 权限）
+    def _boom(self, records):  # noqa: ANN001
+        raise OSError("disk full")
+
+    monkeypatch.setattr(type(r), "_append_to_jsonl", _boom)
+
+    batch = await r.flush()
+    assert batch == []  # 写失败 → 不返回 batch
+    assert r.queue_depth() == 3  # 记录保留
+
+    # 恢复后（monkeypatch 移除）flush 成功
+    monkeypatch.undo()
+    batch2 = await r.flush()
+    assert len(batch2) == 3
+    assert r.queue_depth() == 0
+    files = list(tmp_path.glob("records-*.jsonl"))
+    assert len(files) == 1
+    assert len(files[0].read_text().strip().splitlines()) == 3

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from .._common import emit, get_config_path
+from .._common import emit, get_config_path, EXIT_USER_ERROR
 from ...core.config import load_config_json
 
 
@@ -41,11 +41,17 @@ def doctor(
         checks.append({"name": "config", "status": "ok", "detail": f"{path}"})
     except FileNotFoundError:
         checks.append({"name": "config", "status": "fail", "detail": f"config.json 不存在: {path}"})
-        emit(json_output=json_output, data={"checks": checks, "all_ok": False})
+        emit(json_output=json_output, ok=False,
+             data={"checks": checks, "all_ok": False},
+             error={"code": "CONFIG_NOT_FOUND", "message": f"config.json 不存在: {path}"},
+             exit_code=EXIT_USER_ERROR)
         return
     except (ValueError, KeyError) as e:
         checks.append({"name": "config", "status": "fail", "detail": str(e)})
-        emit(json_output=json_output, data={"checks": checks, "all_ok": False})
+        emit(json_output=json_output, ok=False,
+             data={"checks": checks, "all_ok": False},
+             error={"code": "CONFIG_PARSE_ERROR", "message": str(e)},
+             exit_code=EXIT_USER_ERROR)
         return
 
     # 2. 端口可绑（每个服务）

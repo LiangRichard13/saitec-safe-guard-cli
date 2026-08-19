@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 
-from .._common import emit, get_config_path
+from .._common import emit, get_config_path, EXIT_USER_ERROR
 from ...store.store import Store
 
 
@@ -64,7 +64,8 @@ def report(
 
     if not db_path.exists():
         emit(json_output=json_output, ok=False,
-             error={"code": "NO_DB", "message": f"检测结果库不存在: {db_path}（尚无上报）"})
+             error={"code": "NO_DB", "message": f"检测结果库不存在: {db_path}（尚无上报）"},
+             exit_code=EXIT_USER_ERROR)
         return
 
     since_dt = _parse_since(since)

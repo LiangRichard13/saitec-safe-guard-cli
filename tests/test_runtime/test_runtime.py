@@ -290,3 +290,75 @@ async def test_auth_error_stops_report_loop(config_dir: Path) -> None:
     finally:
         for r in runners:
             await r.cleanup()
+
+
+# ============================================================
+# P0-4：上报失败记录不丢（server 先 500 后恢复 200）
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_report_failure_keeps_records(config_dir: Path) -> None:
+    """检测服务器先 500 后 200：失败批应保留重试，最终全部到达 store（P0-4）"""
+    from aiohttp import web
+
+    call_count = 0
+
+    async def handle_flaky(request: web.Request) -> web.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return web.Response(status=500, text="boom")
+        body = await request.json()
+        batch = body.get("batch", [])
+        results = [
+            {
+                "record_id": r["record_id"],
+                "detection_status": "clean",
+                "risk_level": "low",
+                "detected_at": "2026-08-14T12:00:00Z",
+            }
+            for r in batch
+        ]
+        return web.json_response({"results": results})
+
+    app = web.Application()
+    app.router.add_post("/detect", handle_flaky)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    detector_url = f"http://127.0.0.1:{port}"
+
+    try:
+        cfg_path = config_dir / "config.json"
+        cfg = json.loads(cfg_path.read_text())
+        cfg["detector"]["url"] = detector_url
+        cfg["detector"]["report_interval_sec"] = 1
+        cfg_path.write_text(json.dumps(cfg))
+
+        runtime = Runtime.build_from()
+        await runtime.start()
+        try:
+            proxy_port = runtime._proxies[0]._actual_port  # noqa: SLF001
+            local_url = f"http://127.0.0.1:{proxy_port}"
+
+            async with aiohttp.ClientSession() as session:
+                await session.post(
+                    f"{local_url}/v1/chat/completions",
+                    json={"model": "gpt-4o", "messages": []},
+                )
+            # 等第一次触发（500 失败）+ 退避后重试（200 成功）
+            # backoff: 失败 → 4s 后重试，另加 report_interval=1s
+            await asyncio.sleep(7)
+
+            results = await runtime.query_results(
+                since=datetime.now(timezone.utc) - timedelta(minutes=5),
+            )
+            assert len(results) == 1  # 记录未因失败丢失
+            assert call_count >= 2  # 至少失败一次 + 成功一次
+        finally:
+            await runtime.stop()
+    finally:
+        await runner.cleanup()

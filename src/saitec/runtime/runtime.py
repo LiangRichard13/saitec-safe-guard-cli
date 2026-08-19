@@ -43,9 +43,17 @@ logger = logging.getLogger(__name__)
 class Runtime:
     """运行时编排器"""
 
-    def __init__(self, config: AppConfig, sources: ConfigSources) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        sources: ConfigSources,
+        data_dir: Path | None = None,
+    ) -> None:
         self._config = config
         self._sources = sources
+        # P0-7：数据目录跟随 config 所在目录（records / results.db / logs）
+        # 默认取当前工作目录的 config.json 所在目录（CLI 命令同样按 config.parent 读取）
+        self._data_dir = data_dir
         self._stopped = True
         self._auth_failed = False
 
@@ -76,8 +84,10 @@ class Runtime:
         """
         if config_path is None:
             config_path = resolve_config_path()
+        config_path = Path(config_path).expanduser().resolve()
         config, sources = load_config_with_overrides(config_path, **cli_overrides)
-        return Runtime(config, sources)
+        # 数据目录跟随 config 所在目录（P0-7）
+        return Runtime(config, sources, data_dir=config_path.parent)
 
     # ============================================================
     # 生命周期
@@ -87,7 +97,8 @@ class Runtime:
         if not self._stopped:
             return
         try:
-            data_dir = resolve_data_dir()
+            # P0-7：数据目录跟随 config 目录（build_from 已注入）
+            data_dir = self._data_dir or resolve_data_dir()
             data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
             # 1. Recorder（JSONL 落盘）
@@ -188,13 +199,18 @@ class Runtime:
     # ============================================================
 
     async def _report_loop(self) -> None:
-        """周期上报循环（含错误分类 + 指数退避）"""
+        """周期上报循环（含错误分类 + 指数退避 + P0-4 失败保留 + P0-5 兜底）
+
+        - 上报失败（ReportError）时 **pending 保留**，下一轮优先重试，直到成功才清空
+        - 非 ReportError 的意外异常（SQLite locked 等）也兜底记录并退避，**不杀死循环**
+        - 游标只推进到**已成功上报**的批次末尾（失败记录不会被游标越过）
+        """
         # 先启动续传（recover 未上报记录）
         await self._replay_unreported()
 
+        pending: list[Record] = []
         backoff = 1
         while not self._stopped:
-            # 睡眠（指数退避在错误时使用，所以正常情况 sleep 是 report_interval_sec）
             sleep_sec = self._config.detector.report_interval_sec if backoff == 1 else min(
                 60, 2 ** backoff
             )
@@ -204,28 +220,43 @@ class Runtime:
                 break
             if self._stopped:
                 break
+
+            # pending 未清空时**不再取新批**（避免内存无界增长），只重试 pending
             try:
-                batch = await self._recorder.flush()  # type: ignore[union-attr]
+                if not pending:
+                    batch = await self._recorder.flush()  # type: ignore[union-attr]
+                    if batch:
+                        pending.extend(batch)
             except Exception:
                 logger.exception("recorder flush failed")
-                continue
-            if not batch:
+
+            if not pending:
                 backoff = 1
                 continue
+
             try:
-                results = await self._reporter.report(batch)  # type: ignore[union-attr]
+                results = await self._reporter.report(pending)  # type: ignore[union-attr]
                 await self._store.save_results(results)  # type: ignore[union-attr]
-                await self._store.advance_cursor(self._make_cursor(batch[-1]))
+                # 游标推进到成功批末尾
+                await self._store.advance_cursor(self._make_cursor(pending[-1]))
+                pending.clear()
                 backoff = 1
             except ReportError as e:
                 if e.kind == ReportErrorKind.AUTH:
                     self._auth_failed = True
                     logger.error("X-API-Key 失效，停止上报：请重新 init")
                     return
-                # PAYLOAD / SERVER：指数退避
                 logger.warning(
-                    "report failed (kind=%s): %s; backoff=%ds",
-                    e.kind, e.message, min(60, 2 ** backoff),
+                    "report failed (kind=%s): %s; %d 条记录保留待重试; backoff=%ds",
+                    e.kind, e.message, len(pending), min(60, 2 ** backoff),
+                )
+                backoff = min(backoff + 1, 6)
+            except Exception as e:
+                # P0-5：任何意外异常（SQLite locked / store 故障等）兜底，
+                # 不杀死后台循环
+                logger.exception(
+                    "report loop unexpected error; %d 条记录保留待重试",
+                    len(pending),
                 )
                 backoff = min(backoff + 1, 6)
 

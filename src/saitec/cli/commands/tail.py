@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from .._common import emit, get_config_path
+from .._common import emit, get_config_path, EXIT_USER_ERROR
 
 
 def tail(
@@ -22,14 +22,16 @@ def tail(
 
     if not records_dir.exists():
         emit(json_output=json_output, ok=False,
-             error={"code": "NO_RECORDS", "message": f"records 目录不存在: {records_dir}"})
+             error={"code": "NO_RECORDS", "message": f"records 目录不存在: {records_dir}"},
+             exit_code=EXIT_USER_ERROR)
         return
 
     # 找到当前活跃的 JSONL 文件（今天的）
     files = sorted(records_dir.glob("records-*.jsonl"))
     if not files:
         emit(json_output=json_output, ok=False,
-             error={"code": "NO_RECORDS", "message": "无 records-*.jsonl 文件"})
+             error={"code": "NO_RECORDS", "message": "无 records-*.jsonl 文件"},
+             exit_code=EXIT_USER_ERROR)
         return
     active = files[-1]
 

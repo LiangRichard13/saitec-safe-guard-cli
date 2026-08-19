@@ -83,10 +83,19 @@ def start_cmd(
     # 3. 启动子进程（foreground serve）
     serve_script = Path(__file__).parent.parent / "_serve.py"
     cmd = [sys.executable, str(serve_script), str(path)]
+    # P1-9：CLI 覆盖转 SAITEC_* env 让子进程生效（_serve.py 走 env 覆盖）
+    env_overrides: dict[str, str] = {}
+    if report_interval is not None:
+        env_overrides["SAITEC_REPORT_INTERVAL"] = str(report_interval)
+    if batch_size is not None:
+        env_overrides["SAITEC_BATCH_SIZE"] = str(batch_size)
+    child_env = os.environ.copy()
+    child_env.update(env_overrides)
     try:
         proc = subprocess.Popen(
             cmd,
             cwd=str(path.parent),
+            env=child_env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=(os.name != "nt"),
@@ -107,4 +116,5 @@ def start_cmd(
              "config_path": str(path),
              "services": [{"name": s.name, "port": s.port} for s in config.services],
              "log_file": str(path.parent / "logs" / "safe-guard.log"),
+             "applied_overrides": env_overrides,
          })

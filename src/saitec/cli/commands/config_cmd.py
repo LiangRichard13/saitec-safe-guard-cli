@@ -38,6 +38,18 @@ _INT_FIELDS = {
 }
 _BOOL_FIELDS = {"record_body"}
 
+# 敏感字段：任何输出（list / get）都不得展示明文
+_SECRET_FIELDS = {"detector.api_key", "api_key"}
+
+
+def _redact(value: Any, field: str) -> Any:
+    """敏感字段脱敏：api_key 显示 sk-***"""
+    if field in _SECRET_FIELDS or field.endswith(".api_key"):
+        if value and isinstance(value, str):
+            return value[:3] + "***" if len(value) > 3 else "***"
+        return "***"
+    return value
+
 
 def _load_raw(path: Path) -> dict:
     """读取原始 config JSON"""
@@ -196,7 +208,8 @@ def get_cmd(
              error={"code": "KEY_NOT_FOUND", "message": f"字段不存在: {key}"},
              exit_code=EXIT_USER_ERROR)
         return
-    emit(json_output=json_output, data={"key": key, "value": value})
+    # 敏感字段（api_key）脱敏后输出
+    emit(json_output=json_output, data={"key": key, "value": _redact(value, key)})
 
 
 @app.command(name="set")
@@ -305,12 +318,13 @@ def list_cmd(
 
     flat = _collect_flat(data)
 
-    # 环境变量来源标记
+    # 环境变量来源标记 + 敏感字段脱敏
     env = os.environ
-    for field in flat:
+    for field in list(flat.keys()):
         env_var = _env_var_for_field(field)
         if env_var and env_var in env:
             flat[field] = env[env_var]  # 显示 env 覆盖后的值
+        flat[field] = _redact(flat[field], field)
 
     if json_output:
         result = {

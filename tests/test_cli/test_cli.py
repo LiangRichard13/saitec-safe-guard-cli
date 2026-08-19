@@ -61,7 +61,7 @@ def test_init_missing_api_key(isolated: Path) -> None:
         app, ["init", "--detector-url", "http://detector:8080"],
         input="\n",  # stdin 非 TTY → _prompt 返回默认，api_key 空
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 1  # P1-10：用户错误 → exit 1
     assert "缺少 api_key" in result.stderr
 
 
@@ -134,7 +134,7 @@ def test_config_set_invalid_type(ready_config: Path) -> None:
     result = runner.invoke(app, ["config", "set", "detector.batch_size", "not-int"])
     assert result.exit_code == 1
     cfg = json.loads((ready_config / "config.json").read_text())
-    assert cfg["detector"]["batch_size"] == 100  # 未变
+    assert cfg["detector"]["batch_size"] == 500  # 默认值（P0-8 后从 100 改为 500）
 
 
 def test_config_set_invalid_value_rollback(ready_config: Path) -> None:
@@ -164,6 +164,28 @@ def test_config_backup_created_on_set(ready_config: Path) -> None:
     runner.invoke(app, ["config", "set", "log_level", "DEBUG"])
     backups = list(ready_config.glob("config.json.bak.*"))
     assert len(backups) == 1
+
+
+def test_config_get_redacts_api_key(ready_config: Path) -> None:
+    """api_key 明文不应出现在 config get 输出（P0-6）"""
+    result = runner.invoke(app, ["config", "get", "detector.api_key", "--json"])
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    value = data["data"]["value"]
+    assert "***" in value  # 脱敏标记
+    # 完整明文不得出现在任何输出
+    full_key = json.loads((ready_config / "config.json").read_text())["detector"]["api_key"]
+    assert full_key not in result.stdout
+
+
+def test_config_list_redacts_api_key(ready_config: Path) -> None:
+    """api_key 明文不应出现在 config list 输出（P0-6）"""
+    result = runner.invoke(app, ["config", "list", "--json"])
+    data = json.loads(result.stdout)
+    api_key_val = data["data"]["config"]["detector.api_key"]["value"]
+    assert "***" in api_key_val  # 脱敏标记
+    full_key = "sk"  # 测试 fixture 用的明文
+    assert full_key not in result.stdout  # 完整明文不得出现
 
 
 # ============================================================
@@ -199,7 +221,8 @@ def test_doctor_quick(ready_config: Path) -> None:
 
 def test_doctor_missing_config(isolated: Path) -> None:
     result = runner.invoke(app, ["doctor", "--quick"])
-    assert "fail" in result.stdout
+    assert result.exit_code == 1  # P1-10
+    assert "不存在" in result.stderr
 
 
 # ============================================================
@@ -209,7 +232,7 @@ def test_doctor_missing_config(isolated: Path) -> None:
 
 def test_report_no_db(ready_config: Path) -> None:
     result = runner.invoke(app, ["report"])
-    assert result.exit_code == 0
+    assert result.exit_code == 1  # P1-10
     assert "不存在" in result.stderr
 
 

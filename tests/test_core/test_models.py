@@ -60,7 +60,7 @@ def test_detector_config_defaults() -> None:
         api_key="sk-test",
     )
     assert cfg.report_interval_sec == 60
-    assert cfg.batch_size == 100
+    assert cfg.batch_size == 500  # P0-8 默认从 100 调到 500
     assert cfg.max_queue_size == 10000
 
 

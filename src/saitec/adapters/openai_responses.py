@@ -36,25 +36,52 @@ class OpenAIResponsesAdapter(Adapter):
         }
 
     def on_stream_chunk(self, chunk: bytes) -> None:
+        """累积一个 SSE chunk（跨 chunk 行缓冲）"""
         try:
-            text = chunk.decode("utf-8", errors="replace")
+            bare = self._try_bare_json(chunk)
+            if bare is not None:
+                self._accumulate_non_stream(bare)
+                return
+            for line in self._consume_chunk(chunk):
+                self._process_line(line)
         except Exception:
             self._error_chunk_count += 1
-            return
 
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            if not line or not line.startswith("data:"):
+    def _accumulate_non_stream(self, obj: dict[str, Any]) -> None:
+        """非流式响应（output[].content[].text）"""
+        for item in obj.get("output", []) or []:
+            if item.get("type") != "message":
                 continue
-            payload = line[len("data:"):].strip()
-            if not payload or payload == "[DONE]":
-                continue
-            try:
-                obj = json.loads(payload)
-            except json.JSONDecodeError:
-                self._error_chunk_count += 1
-                continue
-            self._accumulate(obj)
+            for part in item.get("content", []) or []:
+                if part.get("type") == "output_text":
+                    text = part.get("text")
+                    if text:
+                        self._content += text
+        status = obj.get("status")
+        if status:
+            self._finish_reason = status
+        usage = obj.get("usage") or {}
+        if usage:
+            self._usage = {
+                "prompt_tokens": usage.get("input_tokens"),
+                "completion_tokens": usage.get("output_tokens"),
+                "total_tokens": usage.get("total_tokens"),
+            }
+        self._terminal = True  # 非流式响应天然终止
+
+    def _process_line(self, raw_line: str) -> None:
+        line = raw_line.strip()
+        if not line or not line.startswith("data:"):
+            return
+        payload = line[len("data:"):].strip()
+        if not payload or payload == "[DONE]":
+            return
+        try:
+            obj = json.loads(payload)
+        except json.JSONDecodeError:
+            self._error_chunk_count += 1
+            return
+        self._accumulate(obj)
 
     def _accumulate(self, obj: dict[str, Any]) -> None:
         event_type = obj.get("type", "")
@@ -92,6 +119,8 @@ class OpenAIResponsesAdapter(Adapter):
             self._terminal = True
 
     def finalize(self) -> dict[str, Any]:
+        for line in self._drain_buffer():
+            self._process_line(line)
         return {
             "content": self._content,
             "finish_reason": self._finish_reason,

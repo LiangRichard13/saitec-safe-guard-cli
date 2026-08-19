@@ -8,7 +8,7 @@ from pathlib import Path
 import aiohttp
 import typer
 
-from .._common import emit, get_config_path
+from .._common import emit, get_config_path, EXIT_USER_ERROR
 from ...core.config import load_config_json
 from ...core.models import Record
 from ...reporter.reporter import Reporter
@@ -76,7 +76,8 @@ def do_redo(
     if record is None:
         emit(json_output=json_output, ok=False,
              error={"code": "RECORD_NOT_FOUND",
-                    "message": f"在 JSONL 中未找到记录: {record_id}"})
+                    "message": f"在 JSONL 中未找到记录: {record_id}"},
+             exit_code=EXIT_USER_ERROR)
         return
 
     try:

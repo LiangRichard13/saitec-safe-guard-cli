@@ -11,7 +11,7 @@ import typer
 
 from .._common import (
     EXIT_INTERNAL_ERROR,
-    EXIT_OK,
+    EXIT_USER_ERROR,
     emit,
     get_config_path,
 )
@@ -51,7 +51,7 @@ def _build_default_config(detector_url: str, api_key: str) -> dict:
             "url": detector_url,
             "api_key": api_key,
             "report_interval_sec": 60,
-            "batch_size": 100,
+            "batch_size": 500,
             "max_queue_size": 10000,
         },
         "services": DEFAULT_SERVICES,
@@ -116,7 +116,7 @@ def init_cmd(
                 "code": "CONFIG_EXISTS",
                 "message": f"config.json 已存在: {path}（用 --force 覆盖）",
             },
-            exit_code=EXIT_OK,
+            exit_code=EXIT_USER_ERROR,
         )
         return
 
@@ -135,7 +135,7 @@ def init_cmd(
                 "code": "MISSING_API_KEY",
                 "message": "缺少 api_key：用 --api-key 指定或通过环境变量 SAITEC_API_KEY 提供",
             },
-            exit_code=EXIT_OK,
+            exit_code=EXIT_USER_ERROR,
         )
         return
 

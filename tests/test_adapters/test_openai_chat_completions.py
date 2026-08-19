@@ -137,3 +137,98 @@ def test_mixed_valid_and_invalid_lines() -> None:
     result = a.finalize()
     assert result["content"] == "ab"
     assert a.is_terminal()
+
+
+# ============================================================
+# 跨 chunk 行缓冲（P0-1：TCP 分片把 data: 行切成两半）
+# ============================================================
+
+
+def test_half_line_split_across_chunks() -> None:
+    """data: 行被 TCP 分片切成两半，应跨 chunk 拼接"""
+    a = OpenAIChatCompletionsAdapter()
+    first = b'data: {"choices":[{"delta":{"con'
+    second = b'tent":"Hello"}}]}\n\n'
+    a.on_stream_chunk(first)
+    a.on_stream_chunk(second)
+    result = a.finalize()
+    assert result["content"] == "Hello"
+
+
+def test_split_right_at_data_prefix() -> None:
+    """分片恰好切在 'data:' 前缀中间"""
+    a = OpenAIChatCompletionsAdapter()
+    a.on_stream_chunk(b'dat')
+    a.on_stream_chunk(b'a: {"choices":[{"delta":{"content":"x"}}]}\n\n')
+    assert a.finalize()["content"] == "x"
+
+
+def test_done_marker_split() -> None:
+    """[DONE] 标记被切成两半"""
+    a = OpenAIChatCompletionsAdapter()
+    a.on_stream_chunk(b'data: [DO')
+    a.on_stream_chunk(b'NE]\n\n')
+    assert a.is_terminal()
+
+
+def test_multiple_lines_in_one_chunk_plus_buffer() -> None:
+    """一个 chunk 含多个完整行 + 末尾半个行，下个 chunk 补齐"""
+    a = OpenAIChatCompletionsAdapter()
+    a.on_stream_chunk(
+        b'data: {"choices":[{"delta":{"content":"one"}}]}\n'
+        b'data: {"choices":[{"delta":{"con'
+    )
+    a.on_stream_chunk(
+        b'tent":"two"}}]}\n'
+        b'data: [DONE]\n\n'
+    )
+    result = a.finalize()
+    assert result["content"] == "onetwo"
+    assert a.is_terminal()
+
+
+def test_eof_without_trailing_newline() -> None:
+    """最后一个 data: 行没有结尾换行（EOF）也应被 finalize 处理"""
+    a = OpenAIChatCompletionsAdapter()
+    a.on_stream_chunk(
+        b'data: {"choices":[{"delta":{"content":"eof"}}]}'
+    )  # 无 \n
+    result = a.finalize()
+    assert result["content"] == "eof"
+
+
+# ============================================================
+# 非流式响应（P0-2：裸 JSON 整段喂给 adapter）
+# ============================================================
+
+
+def test_non_stream_response_parsed() -> None:
+    """非流式响应（stream:false）的整段 JSON 应被解析（P0-2 修复）"""
+    a = OpenAIChatCompletionsAdapter()
+    body = json.dumps(
+        {
+            "id": "chatcmpl-123",
+            "object": "chat.completion",
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": "Hi there"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 2},
+        }
+    ).encode()
+    a.on_stream_chunk(body)
+    result = a.finalize()
+    assert result["content"] == "Hi there"
+    assert result["finish_reason"] == "stop"
+    assert result["usage"]["prompt_tokens"] == 5
+
+
+def test_non_stream_response_is_terminal() -> None:
+    """非流式响应天然终止"""
+    a = OpenAIChatCompletionsAdapter()
+    a.on_stream_chunk(
+        json.dumps({"choices": [{"message": {"content": "x"}}]}).encode()
+    )
+    assert a.is_terminal()

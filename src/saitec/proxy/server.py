@@ -5,7 +5,7 @@
 recorder.enqueue()。
 
 ⚠️ 已知限制：
-- 转发请求体（request.body）和流式响应（response.content）不做大小限制
+- 请求体 / 非流式响应体有大小上限（`max_body_bytes`，默认 100MB）防 OOM
 - 上游超时通过 aiohttp.ClientTimeout 控制
 """
 from __future__ import annotations
@@ -26,6 +26,8 @@ from ..recorder.recorder import Recorder
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_MAX_BODY_BYTES = 100 * 1024 * 1024  # 100MB
+
 
 class ProxyService:
     """单个反向代理服务实例（对应一个本地端口 + 一个上游）"""
@@ -37,12 +39,14 @@ class ProxyService:
         recorder: Recorder,
         http_client: aiohttp.ClientSession,
         upstream_timeout_sec: float = 60.0,
+        max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
     ) -> None:
         self._spec = spec
         self._adapter = adapter
         self._recorder = recorder
         self._http_client = http_client
         self._upstream_timeout = aiohttp.ClientTimeout(total=upstream_timeout_sec)
+        self._max_body_bytes = max_body_bytes
 
         self._app = web.Application()
         self._app.router.add_route("*", "/{path:.*}", self._handle)
@@ -50,6 +54,17 @@ class ProxyService:
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self._actual_port: int = self._spec.port  # start() 后会更新为实际端口
+
+    async def _read_limited(self, reader: aiohttp.StreamReader, limit: int) -> bytes:
+        """P1-12：分块读取，总字节超限抛 ValueError（防 OOM）"""
+        chunks: list[bytes] = []
+        total = 0
+        while chunk := await reader.read(64 * 1024):
+            total += len(chunk)
+            if total > limit:
+                raise ValueError(f"body exceeds {limit} bytes")
+            chunks.append(chunk)
+        return b"".join(chunks)
 
     # ============================================================
     # 生命周期
@@ -94,9 +109,12 @@ class ProxyService:
         error_msg: str | None = None
         status_code: int = 0
 
-        # 1. 读取请求体
+        # 1. 读取请求体（P1-12：分块 + 大小上限防 OOM）
         try:
-            request_body = await request.read()
+            request_body = await self._read_limited(request.content, self._max_body_bytes)
+        except ValueError as e:
+            error_msg = f"request body too large: {e}"
+            return web.Response(status=413, text=error_msg)
         except Exception as e:
             error_msg = f"read request failed: {e}"
             request_body = b""
@@ -178,9 +196,12 @@ class ProxyService:
             )
             return response
 
-        # 非流式：直接读全部 body
+        # 非流式：读全部 body（P1-12：分块 + 上限防 OOM）
         try:
-            body = await upstream_resp.read()
+            body = await self._read_limited(upstream_resp.content, self._max_body_bytes)
+        except ValueError as e:
+            error_msg = f"upstream response too large: {e}"
+            return web.Response(status=502, text=error_msg)
         except Exception as e:
             error_msg = f"upstream read failed: {e}"
             body = b""

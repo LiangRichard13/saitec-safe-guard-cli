@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from .._common import emit, get_config_path
+from .._common import emit, get_config_path, EXIT_USER_ERROR
 
 
 def logs(
@@ -23,7 +23,8 @@ def logs(
 
     if not log_file.exists():
         emit(json_output=json_output, ok=False,
-             error={"code": "NO_LOG", "message": f"日志不存在: {log_file}（服务可能未启动）"})
+             error={"code": "NO_LOG", "message": f"日志文件不存在: {log_file}（服务可能未启动）"},
+             exit_code=EXIT_USER_ERROR)
         return
 
     def _filter(line: str) -> bool:

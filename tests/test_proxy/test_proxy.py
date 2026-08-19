@@ -330,3 +330,42 @@ async def test_proxy_stop_is_idempotent(
         await proxy.stop()
         await proxy.stop()  # 第二次应不报错（虽然当前实现会因 _runner None 报错）
     # 注：当前实现不保证幂等（stop() 两次第二次会 AttributeError）
+
+
+# ============================================================
+# P1-12：请求体 / 响应体大小上限
+# ============================================================
+
+
+async def test_proxy_request_body_too_large(
+    client_session: aiohttp.ClientSession,
+    tmp_path: Path,
+) -> None:
+    """请求体超过 max_body_bytes → 返回 413"""
+    adapter = get_adapter("openai-chat-completions")
+    recorder = Recorder(tmp_path, batch_size=10)
+    spec = EndpointSpec(
+        name="s",
+        port=0,
+        upstream="http://127.0.0.1:1",
+        endpoint_type="openai-chat-completions",
+        record_body=True,
+    )
+    # 极小上限（100 bytes）触发限制
+    proxy = ProxyService(
+        spec, adapter, recorder, client_session, max_body_bytes=100
+    )
+    await proxy.start()
+    site = proxy._site  # noqa: SLF001
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    try:
+        big_body = b'{"messages":[{"role":"user","content":"' + b"x" * 200 + b'"}]}'
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"http://127.0.0.1:{port}/v1/chat/completions",
+                data=big_body,
+                headers={"Content-Type": "application/json"},
+            ) as resp:
+                assert resp.status == 413
+    finally:
+        await proxy.stop()
