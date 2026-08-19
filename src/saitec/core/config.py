@@ -277,13 +277,13 @@ def validate_config(config: AppConfig) -> list[ConfigError]:
     # services
     seen_ports: set[int] = set()
     for i, svc in enumerate(config.services):
-        # port 范围 + 唯一性
-        if not (1 <= svc.port <= 65535):
+        # port 范围 + 唯一性（0 表示自动分配，启动时由 OS 选定）
+        if not (0 <= svc.port <= 65535):
             errors.append(
                 ConfigError(
                     code=ConfigErrorCode.CONFIG_VALIDATION_ERROR,
                     field=f"services[{i}].port",
-                    message=f"port must be in [1, 65535], got {svc.port}",
+                    message=f"port must be in [0, 65535], got {svc.port}",
                 )
             )
         if svc.port in seen_ports:

@@ -319,7 +319,7 @@ def test_validate_config_port_out_of_range() -> None:
         ],
     )
     errors = validate_config(cfg)
-    assert any("[1, 65535]" in e.message for e in errors)
+    assert any("[0, 65535]" in e.message for e in errors)
 
 
 def test_validate_config_invalid_endpoint_type() -> None:
