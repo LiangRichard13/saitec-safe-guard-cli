@@ -1,9 +1,18 @@
-"""status — 查询运行状态"""
+"""status — 查询运行状态（PID 存活 + 配置 + 日志尾部）"""
 from __future__ import annotations
 
 from pathlib import Path
 
 import typer
+
+from .._common import (
+    EXIT_OK,
+    emit,
+    get_config_path,
+    is_pid_alive,
+    read_pid,
+)
+from ...core.config import load_config_json
 
 
 def status_cmd(
@@ -11,5 +20,47 @@ def status_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """查看各端口 / 上游 / 缓存积压 / 上报状态"""
-    raise NotImplementedError("Phase E 实现")
+    """查看各端口 / 上游 / 运行状态"""
+    path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
+
+    pid = read_pid(path)
+    running = pid is not None and is_pid_alive(pid)
+
+    services: list[dict] = []
+    try:
+        config = load_config_json(path)
+        services = [
+            {
+                "name": s.name,
+                "port": s.port,
+                "upstream": s.upstream,
+                "endpoint_type": s.endpoint_type,
+                "record_body": s.record_body,
+            }
+            for s in config.services
+        ]
+    except FileNotFoundError:
+        services = []
+
+    data = {
+        "running": running,
+        "pid": pid if running else None,
+        "config_path": str(path),
+        "services": services,
+        "queue_depth": "N/A",  # 运行中的真实值需 `safe-guard tail` 或日志观察
+    }
+
+    # 附加日志尾部（错误时有用）
+    log_file = path.parent / "logs" / "safe-guard.log"
+    if log_file.exists():
+        data["last_log"] = _tail(log_file, 10)
+
+    emit(json_output=json_output, data=data)
+
+
+def _tail(path: Path, n: int) -> list[str]:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return lines[-n:]
+    except OSError:
+        return []

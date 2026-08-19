@@ -1,26 +1,64 @@
 """purge — 清理过期 JSONL + SQLite"""
 from __future__ import annotations
 
+import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import typer
+
+from .._common import emit, get_config_path
 
 
 def purge(
     ctx: typer.Context,
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
-    retention_days: int = typer.Option(
-        30,
-        "--retention-days",
-        "-d",
-        help="保留天数（默认 30）",
-    ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="只显示将要删除的内容，不实际删除",
-    ),
+    retention_days: int = typer.Option(30, "--retention-days", "-d", help="保留天数（默认 30）"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="只显示将要删除的内容，不实际删除"),
 ) -> None:
     """清理 `retention_days` 之前的 JSONL 文件与 SQLite 记录"""
-    raise NotImplementedError("Phase E 实现")
+    path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    cutoff_str = cutoff.date().isoformat()
+
+    records_dir = path.parent / "records"
+    db_path = path.parent / "results.db"
+
+    removed_files: list[str] = []
+    removed_rows = 0
+
+    # 1. JSONL 按天分片：文件名 records-YYYY-MM-DD.jsonl
+    if records_dir.exists():
+        for f in sorted(records_dir.glob("records-*.jsonl")):
+            # 从文件名提取日期
+            try:
+                date_part = f.stem.replace("records-", "")
+                if date_part < cutoff_str:
+                    removed_files.append(f.name)
+                    if not dry_run:
+                        f.unlink(missing_ok=True)
+            except ValueError:
+                continue
+
+    # 2. SQLite：删除 timestamp < cutoff 的记录
+    if db_path.exists() and not dry_run:
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cur = conn.execute(
+                    "DELETE FROM detection_results WHERE timestamp < ?",
+                    (cutoff.isoformat(),),
+                )
+                removed_rows = cur.rowcount
+                conn.commit()
+        except sqlite3.Error:
+            removed_rows = 0
+
+    emit(json_output=json_output,
+         data={
+             "dry_run": dry_run,
+             "retention_days": retention_days,
+             "cutoff": cutoff_str,
+             "removed_jsonl_files": removed_files,
+             "removed_sqlite_rows": removed_rows,
+         })

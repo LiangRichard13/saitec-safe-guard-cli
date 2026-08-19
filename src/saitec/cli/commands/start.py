@@ -1,9 +1,23 @@
-"""start — 启动服务（异步，PID 文件）"""
+"""start — 启动服务（异步：fork 子进程 + PID 文件）"""
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import typer
+
+from .._common import (
+    EXIT_OK,
+    EXIT_RUNTIME_ERROR,
+    emit,
+    get_config_path,
+    is_pid_alive,
+    read_pid,
+    write_pid,
+)
+from ...core.config import validate_config
 
 
 def start_cmd(
@@ -24,4 +38,73 @@ def start_cmd(
     ),
 ) -> None:
     """读配置，起多个反向代理端口，开始记录 + 定时上报"""
-    raise NotImplementedError("Phase E 实现")
+    path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
+
+    # 1. 校验配置
+    try:
+        from ...core.config import apply_env_overrides, apply_cli_overrides, load_config_json
+        config = load_config_json(path)
+        config = apply_env_overrides(config)
+        if report_interval is not None or batch_size is not None:
+            config = apply_cli_overrides(
+                config,
+                report_interval=report_interval,
+                batch_size=batch_size,
+            )
+        errors = validate_config(config)
+    except FileNotFoundError:
+        emit(json_output=json_output, ok=False,
+             error={"code": "CONFIG_NOT_FOUND", "message": f"config.json 不存在: {path}"},
+             exit_code=EXIT_RUNTIME_ERROR)
+        return
+    except (ValueError, KeyError) as e:
+        emit(json_output=json_output, ok=False,
+             error={"code": "CONFIG_PARSE_ERROR", "message": str(e)},
+             exit_code=EXIT_RUNTIME_ERROR)
+        return
+    if errors:
+        emit(json_output=json_output, ok=False,
+             error={"code": "CONFIG_VALIDATION_ERROR",
+                    "message": "配置校验失败（不启动）", "errors": [
+                        {"field": e.field, "message": e.message} for e in errors
+                    ]},
+             exit_code=EXIT_RUNTIME_ERROR)
+        return
+
+    # 2. 检查已有实例
+    pid = read_pid(path)
+    if pid is not None and is_pid_alive(pid):
+        emit(json_output=json_output, ok=False,
+             error={"code": "ALREADY_RUNNING",
+                    "message": f"服务已在运行 (PID {pid})。如需重启用 `safe-guard restart`"},
+             exit_code=EXIT_RUNTIME_ERROR)
+        return
+
+    # 3. 启动子进程（foreground serve）
+    serve_script = Path(__file__).parent.parent / "_serve.py"
+    cmd = [sys.executable, str(serve_script), str(path)]
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(path.parent),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=(os.name != "nt"),
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+    except OSError as e:
+        emit(json_output=json_output, ok=False,
+             error={"code": "START_FAILED", "message": f"启动失败: {e}"},
+             exit_code=EXIT_RUNTIME_ERROR)
+        return
+
+    write_pid(path, proc.pid)
+
+    emit(json_output=json_output,
+         data={
+             "started": True,
+             "pid": proc.pid,
+             "config_path": str(path),
+             "services": [{"name": s.name, "port": s.port} for s in config.services],
+             "log_file": str(path.parent / "logs" / "safe-guard.log"),
+         })
