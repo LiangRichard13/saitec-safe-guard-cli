@@ -1,0 +1,4 @@
+# fastapi<0.117 会向新版 starlette 的 Router 传已移除的 on_startup 参数，启动即报错，
+# 因此固定较新的下限，确保与 starlette 1.x 自洽。
+fastapi>=0.117
+uvicorn[standard]>=0.27

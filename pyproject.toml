@@ -24,6 +24,10 @@ dev = [
     "pytest-asyncio>=0.23",
     "mypy>=1.7",
 ]
+mock = [
+    "fastapi>=0.117",
+    "uvicorn[standard]>=0.27",
+]
 
 [project.scripts]
 safe-guard = "saitec.cli.main:app"
