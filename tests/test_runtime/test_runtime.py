@@ -362,3 +362,234 @@ async def test_report_failure_keeps_records(config_dir: Path) -> None:
             await runtime.stop()
     finally:
         await runner.cleanup()
+
+
+# ============================================================
+# P0-5：意外异常不杀死 _report_loop（SQLite locked 等）
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_report_loop_survives_unexpected_exception(config_dir: Path) -> None:
+    """store.save_results 抛非 ReportError 异常时，_report_loop 不崩，记录保留重试"""
+    from aiohttp import web
+    from unittest.mock import AsyncMock, patch
+
+    call_count = 0
+
+    async def handle_ok(request: web.Request) -> web.Response:
+        nonlocal call_count
+        call_count += 1
+        body = await request.json()
+        batch = body.get("batch", [])
+        results = [
+            {
+                "record_id": r["record_id"],
+                "detection_status": "clean",
+                "risk_level": "low",
+                "detected_at": "2026-08-14T12:00:00Z",
+            }
+            for r in batch
+        ]
+        return web.json_response({"results": results})
+
+    app = web.Application()
+    app.router.add_post("/detect", handle_ok)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    detector_url = f"http://127.0.0.1:{port}"
+
+    try:
+        cfg_path = config_dir / "config.json"
+        cfg = json.loads(cfg_path.read_text())
+        cfg["detector"]["url"] = detector_url
+        cfg["detector"]["report_interval_sec"] = 1
+        cfg_path.write_text(json.dumps(cfg))
+
+        runtime = Runtime.build_from()
+
+        # mock store.save_results 第一次抛意外异常，第二次正常
+        save_call_count = 0
+        original_save = None
+
+        async def mock_save_results(results):
+            nonlocal save_call_count
+            save_call_count += 1
+            if save_call_count == 1:
+                raise RuntimeError("SQLite locked (模拟)")
+            return await original_save(results)
+
+        await runtime.start()
+        try:
+            original_save = runtime._store.save_results  # noqa: SLF001
+            runtime._store.save_results = mock_save_results  # noqa: SLF001
+
+            proxy_port = runtime._proxies[0]._actual_port  # noqa: SLF001
+            local_url = f"http://127.0.0.1:{proxy_port}"
+
+            async with aiohttp.ClientSession() as session:
+                await session.post(
+                    f"{local_url}/v1/chat/completions",
+                    json={"model": "gpt-4o", "messages": []},
+                )
+            # 等第一次触发（save 抛异常）+ 退避后重试（save 成功）
+            await asyncio.sleep(7)
+
+            # _report_loop 应未崩溃，记录最终到达 SQLite
+            results = await runtime.query_results(
+                since=datetime.now(timezone.utc) - timedelta(minutes=5),
+            )
+            assert len(results) == 1
+            assert save_call_count >= 2  # 第一次失败，第二次成功
+        finally:
+            await runtime.stop()
+    finally:
+        await runner.cleanup()
+
+
+# ============================================================
+# pending 队列不清空时不取新批（防内存无界增长）
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_report_loop_pending_blocks_new_batch(config_dir: Path) -> None:
+    """pending 未清空时，_report_loop 不再 flush 新批"""
+    from aiohttp import web
+
+    call_count = 0
+
+    async def handle_always_500(request: web.Request) -> web.Response:
+        nonlocal call_count
+        call_count += 1
+        return web.Response(status=500, text="永远失败")
+
+    app = web.Application()
+    app.router.add_post("/detect", handle_always_500)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    detector_url = f"http://127.0.0.1:{port}"
+
+    try:
+        cfg_path = config_dir / "config.json"
+        cfg = json.loads(cfg_path.read_text())
+        cfg["detector"]["url"] = detector_url
+        cfg["detector"]["report_interval_sec"] = 1
+        cfg_path.write_text(json.dumps(cfg))
+
+        runtime = Runtime.build_from()
+        await runtime.start()
+        try:
+            proxy_port = runtime._proxies[0]._actual_port  # noqa: SLF001
+            local_url = f"http://127.0.0.1:{proxy_port}"
+
+            async with aiohttp.ClientSession() as session:
+                # 发 2 条记录
+                await session.post(
+                    f"{local_url}/v1/chat/completions",
+                    json={"model": "gpt-4o", "messages": []},
+                )
+                await asyncio.sleep(0.1)
+                await session.post(
+                    f"{local_url}/v1/chat/completions",
+                    json={"model": "gpt-4o", "messages": []},
+                )
+
+            # 等足够时间触发多次周期：pending 阻塞后不应再 flush
+            await asyncio.sleep(5)
+
+            # recorder 队列应还有第二条（因为第一批失败后 pending 不空，不再取新批）
+            # 或者第一批如果 flush 了 2 条，pending 里就是 2 条，也不会再 flush
+            # 关键检查：call_count 应不会无限增长（pending 阻塞生效）
+            assert call_count >= 2  # 至少失败 2 次（第一批 + 重试）
+            assert call_count < 10  # 没有无限重试取新批（pending 阻塞生效）
+        finally:
+            await runtime.stop()
+    finally:
+        await runner.cleanup()
+
+
+# ============================================================
+# 续传 (_replay_unreported) 测试
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_replay_unreported_on_restart(
+    config_dir: Path, mock_detector_server: tuple
+) -> None:
+    """进程重启后，_replay_unreported 自动续传游标之后的未上报记录"""
+    from saitec.core.models import ReportCursor
+
+    detector_url, _ = mock_detector_server
+    cfg_path = config_dir / "config.json"
+    cfg = json.loads(cfg_path.read_text())
+    cfg["detector"]["url"] = detector_url
+    cfg["detector"]["report_interval_sec"] = 999  # 不让自动周期上报干扰，续传是焦点
+    cfg_path.write_text(json.dumps(cfg))
+
+    # 数据准备：config 目录下写 JSONL，含 2 条记录（r_old 在游标前，r_new 在游标后）
+    records_dir = config_dir / "records"
+    records_dir.mkdir(parents=True, exist_ok=True)
+
+    def _mk_record(rid: str, ts: str) -> dict:
+        return {
+            "record_id": rid,
+            "service": "svc-a",
+            "endpoint_type": "openai-chat-completions",
+            "upstream": "http://up",
+            "path": "/v1/chat/completions",
+            "timestamp": ts,
+            "elapsed_ms": 100,
+            "status_code": 200,
+            "error": None,
+            "request": {},
+            "response": {"content": "x"},
+        }
+
+    ts_old = "2026-08-20T10:00:00Z"
+    ts_new = "2026-08-20T10:01:00Z"
+    jsonl = records_dir / "records-2026-08-20.jsonl"
+    jsonl.write_text(
+        json.dumps(_mk_record("r_old", ts_old)) + "\n"
+        + json.dumps(_mk_record("r_new", ts_new)) + "\n",
+        encoding="utf-8",
+    )
+
+    # 预先把游标推进到 r_old（模拟第一轮只上报到 r_old 就崩溃）
+    config_db_backup = None
+    runtime = Runtime.build_from()
+    await runtime.start()
+    try:
+        store = runtime._store  # noqa: SLF001
+        await store.advance_cursor(
+            ReportCursor(
+                last_record_id="r_old",
+                last_timestamp=ts_old,
+                updated_at="2026-08-20T10:00:05Z",
+            )
+        )
+        # 清空 recorder 内存队列（避免自动上报反而把 r_new 报了）
+        runtime._recorder._queue.clear()  # noqa: SLF001
+    finally:
+        await runtime.stop()
+
+    # 第二轮：重启，_replay_unreported 应只续传 r_new（r_old 已被游标越过）
+    runtime2 = Runtime.build_from()
+    await runtime2.start()
+    try:
+        await asyncio.sleep(2)  # 等 _replay_unreported 跑完
+        results = await runtime2.query_results(
+            since=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        assert len(results) == 1  # 只续传了游标之后的 r_new
+        assert results[0].record_id == "r_new"
+        assert results[0].detection_status == "clean"
+    finally:
+        await runtime2.stop()

@@ -246,3 +246,342 @@ def test_purge_empty(ready_config: Path) -> None:
     assert result.exit_code == 0
     data = json.loads(result.stdout)
     assert data["data"]["removed_jsonl_files"] == []
+
+
+# ============================================================
+# report（有数据时）
+# ============================================================
+
+
+def test_report_with_data(ready_config: Path) -> None:
+    """有 SQLite 数据时 report 应正常返回"""
+    import asyncio
+    from datetime import datetime, timezone
+    from saitec.store.store import Store
+    from saitec.core.models import DetectionResult
+
+    db_path = ready_config / "results.db"
+    # 用 Store 初始化表结构
+    async def setup():
+        store = Store(db_path)
+        await store.save_results([
+            DetectionResult(
+                record_id="r1",
+                service="svc-a",
+                endpoint_type="openai-chat-completions",
+                upstream="http://upstream",
+                status_code=200,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                detection_status="clean",
+                risk_level="low",
+                detection_detail={},
+                detected_at=datetime.now(timezone.utc).isoformat(),
+                model="gpt-4o",
+                elapsed_ms=100,
+            )
+        ])
+    asyncio.run(setup())
+
+    result = runner.invoke(app, ["report", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["data"]["count"] == 1
+    assert data["data"]["results"][0]["record_id"] == "r1"
+
+
+def test_report_since_filter(ready_config: Path) -> None:
+    """--since 过滤应生效"""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from saitec.store.store import Store
+    from saitec.core.models import DetectionResult
+
+    db_path = ready_config / "results.db"
+    now = datetime.now(timezone.utc)
+    old = now - timedelta(hours=2)
+
+    async def setup():
+        store = Store(db_path)
+        await store.save_results([
+            DetectionResult(
+                record_id="r_old",
+                service="svc-a",
+                endpoint_type="openai-chat-completions",
+                upstream="http://upstream",
+                status_code=200,
+                timestamp=old.isoformat(),
+                detection_status="clean",
+                risk_level="low",
+                detection_detail={},
+                detected_at=old.isoformat(),
+                model="gpt-4o",
+                elapsed_ms=100,
+            ),
+            DetectionResult(
+                record_id="r_new",
+                service="svc-a",
+                endpoint_type="openai-chat-completions",
+                upstream="http://upstream",
+                status_code=200,
+                timestamp=now.isoformat(),
+                detection_status="clean",
+                risk_level="low",
+                detection_detail={},
+                detected_at=now.isoformat(),
+                model="gpt-4o",
+                elapsed_ms=100,
+            )
+        ])
+    asyncio.run(setup())
+
+    result = runner.invoke(app, ["report", "--since", "30m", "--json"])
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["data"]["count"] == 1
+    assert data["data"]["results"][0]["record_id"] == "r_new"
+
+
+# ============================================================
+# redo
+# ============================================================
+
+
+def test_redo_record_not_found(ready_config: Path) -> None:
+    """redo 找不到 record_id 应报错"""
+    result = runner.invoke(app, ["redo", "nonexistent-id", "--json"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["ok"] is False
+    assert "未找到" in data["error"]["message"]
+
+
+def test_redo_success(ready_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """redo 找到记录并重报应成功"""
+    import json as json_lib
+    from unittest.mock import AsyncMock, MagicMock
+
+    # 准备 JSONL
+    records_dir = ready_config / "records"
+    records_dir.mkdir(parents=True, exist_ok=True)
+    jsonl = records_dir / "records-2026-08-20.jsonl"
+    jsonl.write_text(
+        json_lib.dumps(
+            {
+                "record_id": "r123",
+                "service": "svc-a",
+                "endpoint_type": "openai-chat-completions",
+                "upstream": "http://up",
+                "path": "/v1/chat/completions",
+                "timestamp": "2026-08-20T10:00:00Z",
+                "elapsed_ms": 100,
+                "status_code": 200,
+                "request": {},
+                "response": {},
+            }
+        )
+        + "\n"
+    )
+
+    # mock reporter + store
+    from saitec.cli.commands.redo import _run
+    from unittest.mock import patch
+
+    mock_result = {
+        "record_id": "r123",
+        "reported": True,
+        "detection_status": "clean",
+        "risk_level": "low",
+    }
+
+    with patch("saitec.cli.commands.redo._run", return_value=mock_result):
+        result = runner.invoke(app, ["redo", "r123", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["data"]["record_id"] == "r123"
+
+
+# ============================================================
+# purge（实际清理）
+# ============================================================
+
+
+def test_purge_removes_old_jsonl(ready_config: Path) -> None:
+    """purge 应删除超过 retention_days 的 JSONL"""
+    from datetime import date, timedelta
+
+    records_dir = ready_config / "records"
+    records_dir.mkdir(parents=True, exist_ok=True)
+
+    old_date = (date.today() - timedelta(days=35)).isoformat()
+    new_date = date.today().isoformat()
+    old_file = records_dir / f"records-{old_date}.jsonl"
+    new_file = records_dir / f"records-{new_date}.jsonl"
+    old_file.write_text("old\n")
+    new_file.write_text("new\n")
+
+    result = runner.invoke(app, ["purge", "--retention-days", "30", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["data"]["dry_run"] is False
+    assert old_file.name in data["data"]["removed_jsonl_files"]
+    assert not old_file.exists()
+    assert new_file.exists()
+
+
+def test_purge_dry_run_preserves_files(ready_config: Path) -> None:
+    """--dry-run 不实际删除"""
+    from datetime import date, timedelta
+
+    records_dir = ready_config / "records"
+    records_dir.mkdir(parents=True, exist_ok=True)
+
+    old_date = (date.today() - timedelta(days=35)).isoformat()
+    old_file = records_dir / f"records-{old_date}.jsonl"
+    old_file.write_text("old\n")
+
+    result = runner.invoke(app, ["purge", "--retention-days", "30", "--dry-run", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["data"]["dry_run"] is True
+    assert old_file.name in data["data"]["removed_jsonl_files"]
+    assert old_file.exists()  # 文件未被删除
+
+
+# ============================================================
+# start/stop/restart（基础场景 mock subprocess）
+# ============================================================
+
+
+def test_start_already_running(ready_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """已有运行实例时 start 应拒绝"""
+    from saitec.cli._common import write_pid, pid_file_path
+
+    write_pid(ready_config / "config.json", os.getpid())  # 伪造当前进程为运行中
+
+    result = runner.invoke(app, ["start", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.stdout)
+    assert data["ok"] is False
+    assert "已在运行" in data["error"]["message"]
+
+
+def test_start_config_not_found(isolated: Path) -> None:
+    """config 不存在时 start 应报错"""
+    result = runner.invoke(app, ["start", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.stdout)
+    assert "不存在" in data["error"]["message"]
+
+
+def test_start_success_mock(ready_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """start 成功应返回 pid + 端口信息（mock subprocess）"""
+    from unittest.mock import MagicMock
+
+    mock_proc = MagicMock()
+    mock_proc.pid = 12345
+
+    def mock_popen(*args, **kwargs):
+        return mock_proc
+
+    monkeypatch.setattr("subprocess.Popen", mock_popen)
+
+    result = runner.invoke(app, ["start", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["data"]["started"] is True
+    assert data["data"]["pid"] == 12345
+    assert len(data["data"]["services"]) == 3
+
+
+def test_stop_not_running(ready_config: Path) -> None:
+    """无 PID 文件时 stop 应报错"""
+    result = runner.invoke(app, ["stop", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.stdout)
+    assert "未找到" in data["error"]["message"]
+
+
+def test_stop_stale_pid(ready_config: Path) -> None:
+    """PID 文件存在但进程已死应清理"""
+    from saitec.cli._common import write_pid
+
+    write_pid(ready_config / "config.json", 999999)  # 不存在的 PID
+
+    result = runner.invoke(app, ["stop", "--json"])
+    assert result.exit_code == 2
+    data = json.loads(result.stdout)
+    assert "已失效" in data["error"]["message"]
+
+
+def test_restart_mock(ready_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """restart 应先 stop 再 start（mock subprocess）"""
+    from unittest.mock import MagicMock
+
+    mock_proc = MagicMock()
+    mock_proc.pid = 54321
+
+    def mock_popen(*args, **kwargs):
+        return mock_proc
+
+    monkeypatch.setattr("subprocess.Popen", mock_popen)
+
+    result = runner.invoke(app, ["restart", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["data"]["restarted"] is True
+    assert data["data"]["new_pid"] == 54321
+
+
+# ============================================================
+# logs/tail
+# ============================================================
+
+
+def test_logs_no_file(ready_config: Path) -> None:
+    """logs 在日志不存在时应报错"""
+    result = runner.invoke(app, ["logs", "--json"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert "不存在" in data["error"]["message"]
+
+
+def test_logs_tail(ready_config: Path) -> None:
+    """logs --tail 应返回最后 N 行"""
+    log_dir = ready_config / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "safe-guard.log"
+    log_file.write_text("\n".join([f"line {i}" for i in range(200)]))
+
+    result = runner.invoke(app, ["logs", "--tail", "10", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert len(data["data"]) == 10
+    assert "line 199" in data["data"][-1]
+
+
+def test_logs_service_filter(ready_config: Path) -> None:
+    """logs --service 应过滤"""
+    log_dir = ready_config / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "safe-guard.log"
+    log_file.write_text("svc-a: hello\nsvc-b: world\nsvc-a: bye\n")
+
+    result = runner.invoke(app, ["logs", "--service", "svc-a", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert len(data["data"]) == 2
+    assert "svc-a" in data["data"][0]
+
+
+def test_tail_no_records(ready_config: Path) -> None:
+    """tail 在 records 不存在时应报错"""
+    result = runner.invoke(app, ["tail", "--json"])
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert "不存在" in data["error"]["message"] or "无 records" in data["error"]["message"]
