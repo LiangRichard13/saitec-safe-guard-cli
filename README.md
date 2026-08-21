@@ -17,6 +17,8 @@ safe-guard start
 
 详细使用见 **[`docs/user-guide.md`](docs/user-guide.md)**——含完整命令参考、配置详解、集成示例（Claude Code / Codex / 自写客户端）、排错手册、安全注意事项。
 
+**检测服务器接口开发人员**请看 **[`docs/integration/detector-api.md`](docs/integration/detector-api.md)**——上报请求/响应契约、状态码与重试语义、幂等性要求、最小实现参考。
+
 ## 状态
 
 **v0.1.0 — 初版交付水平**。13 个命令全部可用；端到端链路（init→start→发请求→JSONL→上报→SQLite→report→stop）在 mock detector 与真实 detector 上验证过；198 个 pytest 全绿。

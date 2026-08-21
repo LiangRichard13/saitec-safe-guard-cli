@@ -77,7 +77,8 @@ class Reporter:
         payload = {
             "batch": [dataclasses.asdict(r) for r in batch],
         }
-        url = self._config.url.rstrip("/") + "/detect"
+        # url 只含 scheme+host+port；endpoint_path 默认 /detect（可配不同检测接口）
+        url = self._config.url.rstrip("/") + self._config.endpoint_path
         headers = {"X-API-Key": self._config.api_key}
 
         try:

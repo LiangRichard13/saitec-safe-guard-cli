@@ -28,6 +28,7 @@ from .models import (
 _DETECTOR_ENV_MAP: dict[str, tuple[tuple[str, str], type]] = {
     "SAITEC_DETECTOR_URL": (("detector", "url"), str),
     "SAITEC_API_KEY": (("detector", "api_key"), str),
+    "SAITEC_ENDPOINT_PATH": (("detector", "endpoint_path"), str),
     "SAITEC_REPORT_INTERVAL": (("detector", "report_interval_sec"), int),
     "SAITEC_BATCH_SIZE": (("detector", "batch_size"), int),
     "SAITEC_MAX_QUEUE_SIZE": (("detector", "max_queue_size"), int),
@@ -40,6 +41,7 @@ _TOP_LEVEL_ENV_MAP: dict[str, tuple[tuple[str], type]] = {
 _CLI_FIELD_MAP: dict[str, tuple[tuple[str, ...], type]] = {
     "detector_url": (("detector", "url"), str),
     "api_key": (("detector", "api_key"), str),
+    "endpoint_path": (("detector", "endpoint_path"), str),
     "report_interval": (("detector", "report_interval_sec"), int),
     "batch_size": (("detector", "batch_size"), int),
     "max_queue_size": (("detector", "max_queue_size"), int),
@@ -123,6 +125,7 @@ def load_config_json(path: Path) -> AppConfig:
     detector = DetectorConfig(
         url=detector_raw["url"],
         api_key=detector_raw["api_key"],
+        endpoint_path=detector_raw.get("endpoint_path", "/detect"),
         report_interval_sec=detector_raw.get("report_interval_sec", 60),
         batch_size=detector_raw.get("batch_size", 500),
         max_queue_size=detector_raw.get("max_queue_size", 10000),
@@ -245,6 +248,17 @@ def validate_config(config: AppConfig) -> list[ConfigError]:
                 code=ConfigErrorCode.CONFIG_MISSING_FIELD,
                 field="detector.api_key",
                 message="api_key is required (X-API-Key)",
+            )
+        )
+
+    # detector.endpoint_path 必须以 / 开头（url 只含 scheme+host+port，路径放这里）
+    ep = config.detector.endpoint_path
+    if not ep or not ep.startswith("/"):
+        errors.append(
+            ConfigError(
+                code=ConfigErrorCode.CONFIG_VALIDATION_ERROR,
+                field="detector.endpoint_path",
+                message=f"must start with '/', got {ep!r}",
             )
         )
 

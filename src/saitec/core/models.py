@@ -73,6 +73,9 @@ class DetectorConfig:
 
     url: str
     api_key: str
+    # 上报 endpoint 路径（同一 IP:端口 下不同检测接口，如 /detect-v1 /api/v1/detect）。
+    # url 只含 scheme+host+port，路径放这里，避免拼接歧义。
+    endpoint_path: str = "/detect"
     report_interval_sec: int = 60
     batch_size: int = 500  # P0-8: 100 → 500（10rps 时 100/min 跟不上）
     max_queue_size: int = 10000

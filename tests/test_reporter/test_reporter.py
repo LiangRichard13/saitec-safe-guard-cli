@@ -125,6 +125,46 @@ async def test_report_empty_batch() -> None:
         assert await reporter.report([]) == []
 
 
+async def test_report_custom_endpoint_path() -> None:
+    """endpoint_path 自定义（如 /api/v1/detect-v2）时应打到该路径而非 /detect"""
+    hits: list[str] = []
+
+    async def handle_custom(request: web.Request) -> web.Response:
+        hits.append(request.path)
+        return web.json_response(
+            {
+                "results": [
+                    {
+                        "record_id": "rec-0001",
+                        "detection_status": "clean",
+                        "risk_level": "low",
+                        "detected_at": "2026-08-14T12:00:01Z",
+                    }
+                ]
+            }
+        )
+
+    app = web.Application()
+    app.router.add_post("/api/v1/detect-v2", handle_custom)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    base_url = f"http://127.0.0.1:{port}"
+    try:
+        cfg = DetectorConfig(
+            url=base_url, api_key="sk-test", endpoint_path="/api/v1/detect-v2"
+        )
+        async with aiohttp.ClientSession() as session:
+            reporter = Reporter(cfg, session)
+            results = await reporter.report([_make_record(1)])
+        assert len(results) == 1
+        assert hits == ["/api/v1/detect-v2"]  # 打到了自定义路径
+    finally:
+        await runner.cleanup()
+
+
 # ============================================================
 # 错误分类
 # ============================================================

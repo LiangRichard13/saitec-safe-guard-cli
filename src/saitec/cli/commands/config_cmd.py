@@ -146,8 +146,9 @@ def _raw_to_model(data: dict) -> AppConfig:
     detector = DetectorConfig(
         url=data.get("detector", {}).get("url", ""),
         api_key=data.get("detector", {}).get("api_key", ""),
+        endpoint_path=data.get("detector", {}).get("endpoint_path", "/detect"),
         report_interval_sec=data.get("detector", {}).get("report_interval_sec", 60),
-        batch_size=data.get("detector", {}).get("batch_size", 100),
+        batch_size=data.get("detector", {}).get("batch_size", 500),
         max_queue_size=data.get("detector", {}).get("max_queue_size", 10000),
     )
     services = [
@@ -348,6 +349,7 @@ def _env_var_for_field(field: str) -> str | None:
     mapping = {
         "detector.url": "SAITEC_DETECTOR_URL",
         "detector.api_key": "SAITEC_API_KEY",
+        "detector.endpoint_path": "SAITEC_ENDPOINT_PATH",
         "detector.report_interval_sec": "SAITEC_REPORT_INTERVAL",
         "detector.batch_size": "SAITEC_BATCH_SIZE",
         "detector.max_queue_size": "SAITEC_MAX_QUEUE_SIZE",

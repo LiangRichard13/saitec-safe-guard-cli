@@ -307,6 +307,70 @@ def test_validate_config_duplicate_port() -> None:
     assert any("duplicated" in e.message for e in errors)
 
 
+def test_validate_config_endpoint_path() -> None:
+    """endpoint_path 必须以 / 开头；默认 /detect 合法"""
+    # 默认值合法
+    cfg = AppConfig(
+        detector=DetectorConfig(url="http://d", api_key="k"),
+        services=[],
+    )
+    assert not [e for e in validate_config(cfg) if "endpoint_path" in e.field]
+
+    # 自定义路径合法
+    cfg2 = AppConfig(
+        detector=DetectorConfig(url="http://d", api_key="k", endpoint_path="/api/v1/detect-v2"),
+        services=[],
+    )
+    assert not [e for e in validate_config(cfg2) if "endpoint_path" in e.field]
+
+    # 不以 / 开头 → 报错
+    cfg3 = AppConfig(
+        detector=DetectorConfig(url="http://d", api_key="k", endpoint_path="detect"),
+        services=[],
+    )
+    errors = validate_config(cfg3)
+    assert any(e.field == "detector.endpoint_path" for e in errors)
+
+
+def test_load_config_endpoint_path_default_and_custom(tmp_path) -> None:
+    """JSON 缺省时用 /detect；显式配置时读显式值"""
+    import json as _json
+    from saitec.core.config import load_config_json
+
+    # 缺省
+    p1 = tmp_path / "c1.json"
+    p1.write_text(_json.dumps({
+        "detector": {"url": "http://d", "api_key": "k"},
+        "services": [],
+    }), encoding="utf-8")
+    cfg1 = load_config_json(p1)
+    assert cfg1.detector.endpoint_path == "/detect"
+
+    # 显式
+    p2 = tmp_path / "c2.json"
+    p2.write_text(_json.dumps({
+        "detector": {"url": "http://d", "api_key": "k", "endpoint_path": "/x/detect-v2"},
+        "services": [],
+    }), encoding="utf-8")
+    cfg2 = load_config_json(p2)
+    assert cfg2.detector.endpoint_path == "/x/detect-v2"
+
+
+def test_env_override_endpoint_path(tmp_path, monkeypatch) -> None:
+    """SAITEC_ENDPOINT_PATH 覆盖生效"""
+    import json as _json
+    from saitec.core.config import load_config_json, apply_env_overrides
+
+    p = tmp_path / "c.json"
+    p.write_text(_json.dumps({
+        "detector": {"url": "http://d", "api_key": "k"},
+        "services": [],
+    }), encoding="utf-8")
+    monkeypatch.setenv("SAITEC_ENDPOINT_PATH", "/env-detect")
+    cfg = apply_env_overrides(load_config_json(p))
+    assert cfg.detector.endpoint_path == "/env-detect"
+
+
 def test_validate_config_port_out_of_range() -> None:
     cfg = AppConfig(
         detector=DetectorConfig(url="http://d", api_key="k"),

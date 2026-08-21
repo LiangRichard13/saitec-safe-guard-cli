@@ -50,6 +50,7 @@ def _build_default_config(detector_url: str, api_key: str) -> dict:
         "detector": {
             "url": detector_url,
             "api_key": api_key,
+            "endpoint_path": "/detect",
             "report_interval_sec": 60,
             "batch_size": 500,
             "max_queue_size": 10000,

@@ -403,11 +403,14 @@ safe-guard tail --level error            # 按级别过滤（debug/info/warning/
 
 | 字段 | 类型 | 含义 | 默认 |
 |------|------|------|------|
-| `url` | string | 检测服务器根 URL | — |
+| `url` | string | 检测服务器根 URL（只含 scheme+host+port） | — |
 | `api_key` | string | `X-API-Key` 头值（脱敏显示） | — |
+| `endpoint_path` | string | 上报 endpoint 路径（同一 IP:端口 下不同检测接口，如 `/api/v1/detect-v2`） | `/detect` |
 | `report_interval_sec` | int | 上报周期（秒） | 60 |
 | `batch_size` | int | 单次上报的批量大小 | 500 |
 | `max_queue_size` | int | 内存队列上限（超出丢最旧） | 10000 |
+
+> `url` 与 `endpoint_path` 分开配置的原因：避免 URL 带路径时的拼接歧义。上报完整地址 = `url.rstrip("/") + endpoint_path`。
 
 ### 5.4 services 段字段
 
@@ -437,6 +440,7 @@ safe-guard start --report-interval 5        # 同上，但 CLI 优先级更高
 - `SAITEC_CONFIG` — 配置文件路径
 - `SAITEC_API_KEY` — detector.api_key
 - `SAITEC_DETECTOR_URL` — detector.url
+- `SAITEC_ENDPOINT_PATH` — detector.endpoint_path
 - `SAITEC_REPORT_INTERVAL` — detector.report_interval_sec
 - `SAITEC_BATCH_SIZE` — detector.batch_size
 - `SAITEC_LOG_LEVEL` — log_level
@@ -747,6 +751,7 @@ safe-guard report --since "1h" --json
 - `docs/design/saitec-safe-guard-cli-design.md` — 总体设计
 - `docs/design/architecture.md` — 6 层架构
 - `docs/design/data-model.md` — SQLite + JSONL 数据模型
+- `docs/integration/detector-api.md` — **检测服务器对接文档**（给服务端接口开发人员）
 - `docs/issues/cli-usage-issues.md` — 已知问题与排错历史
 
 ---
