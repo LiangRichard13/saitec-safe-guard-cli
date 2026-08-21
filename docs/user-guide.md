@@ -80,37 +80,49 @@ safe-guard --help
 
 ## 3. 快速上手（5 分钟）
 
-跟着下面 5 步跑通完整链路：**init → start → 发请求 → report → stop**。
+跟着下面步骤跑通完整链路：**init → start → 发请求 → report → stop**。
 
-### 步骤 1：初始化配置
+### 步骤 1：初始化配置（指明要监控哪个端点）
 
 ```bash
-safe-guard init --api-key "<你的X-API-Key>" --detector-url "http://detector.example.com:8080"
+safe-guard init --api-key "<你的X-API-Key>" \
+    --detector-url "http://detector.example.com:8080" \
+    --upstream "https://api.openai.com"
 ```
 
-输出示例（人类可读）：
+`--upstream` 是**你要监控的大模型端点**——可以是官方地址，也可以是任何 OpenAI / Anthropic 兼容端点：
+
+| 场景 | --upstream 示例 |
+|------|-----------------|
+| OpenAI 官方 | `https://api.openai.com` |
+| Anthropic 官方 | `https://api.anthropic.com` |
+| DeepSeek 的 Anthropic 兼容口 | `https://api.deepseek.com/anthropic` |
+| 中转站 / 网关 | `https://opencode.ai/zen/go/v1` |
+| 本地部署模型 | `http://localhost:23333` |
+
+`--endpoint-type`（协议格式）缺省时按 URL 自动猜测（含 `anthropic` → Anthropic Messages 格式，否则 → OpenAI Chat Completions 格式），输出会说明猜了什么；可显式指定 `openai-chat-completions` / `openai-responses` / `anthropic-messages`。
+
+输出示例：
 
 ```
-config_path: C:\Users\Administrator\AppData\Local\saitec\safe-guard\config.json
+config_path: C:\Users\you\AppData\Local\saitec\safe-guard\config.json
 detector_url: http://detector.example.com:8080
-services: 3
-created_at: 2026-08-21T02:00:00Z
-warning: 建议在 Windows 上用 icacls 限制 config.json 权限
+endpoint_type: openai-chat-completions（按 upstream URL 猜测，可用 --endpoint-type 显式指定）
+
+服务映射（客户端 base_url → 本地端口 → 真实上游）:
+  1. openai-chat-completions  [openai-chat-completions]  127.0.0.1:9001  →  https://api.openai.com
+     客户端配置: OPENAI_BASE_URL=http://127.0.0.1:9001/v1
+
+下一步:
+  - 监控更多端点: safe-guard service add <name> --upstream <URL>
+  - 启动服务:     safe-guard start
 ```
 
-生成的 `config.json` 在 `platformdirs` 用户目录下（Windows: `%LOCALAPPDATA%\saitec\safe-guard\config.json`），包含：
-- `detector` 段（url、api_key、上报间隔）
-- 3 个默认 service（OpenAI Chat Completions 9001 / OpenAI Responses 9002 / Anthropic Messages 9003）
-
-**非 TTY 环境**（CI / Agent 调用）：直接用 CLI 参数，无需交互式输入。
-
-**如果 detector 还没准备好**：先用一个占位 URL，等有了再改：
+**要同时监控多个端点？** 用 `service add` 逐个加：
 
 ```bash
-safe-guard init --api-key "PLACEHOLDER_KEY_XXXXXXXX" --detector-url "http://127.0.0.1:8000"
-# 之后改了：
-safe-guard config set detector.url http://real-detector:8080
-safe-guard config set detector.api_key REAL_KEY_XXXX
+safe-guard service add deepseek-claude --upstream https://api.deepseek.com/anthropic
+safe-guard service add local-llm --upstream http://localhost:23333 --port 9010
 ```
 
 ### 步骤 2：启动服务
@@ -119,29 +131,21 @@ safe-guard config set detector.api_key REAL_KEY_XXXX
 safe-guard start
 ```
 
-输出示例：
+输出含服务映射块（客户端地址 → 本地端口 → 真实上游）和日志路径。
 
-```
-started: True
-pid: 40444
-config_path: C:\Users\Administrator\AppData\Local\saitec\safe-guard\config.json
-services: [{"name": "openai-chat-completions", "port": 9001}, ...]
-log_file: ...\logs\safe-guard.log
-applied_overrides: {}
-```
+### 步骤 3：把客户端指到本地端口
 
-服务启动后会在后台 fork 子进程跑 3 个代理端口。查看状态：
+按服务映射块的提示设置环境变量：
 
 ```bash
-safe-guard status
-# running: True
-# pid: 40444
-# services: [3 个服务详情]
+# OpenAI 兼容端点
+export OPENAI_BASE_URL=http://127.0.0.1:9001/v1
+
+# Anthropic 兼容端点
+export ANTHROPIC_BASE_URL=http://127.0.0.1:9002
 ```
 
-### 步骤 3：发请求
-
-把原本指向大模型 API 的请求改到本地端口。比如原来指向 `https://api.openai.com/v1/chat/completions`，现在改到 `http://127.0.0.1:9001/v1/chat/completions`：
+测试一下（透明转发，返回与直连完全一致）：
 
 ```bash
 curl -X POST http://127.0.0.1:9001/v1/chat/completions \
@@ -149,9 +153,7 @@ curl -X POST http://127.0.0.1:9001/v1/chat/completions \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}'
 ```
 
-返回内容跟直接请求 OpenAI 完全一样（透明转发）。
-
-**注意**：第一次请求时，upstream `https://api.openai.com` 会真实连通，需要你**已经配置好 OPENAI_API_KEY 等环境变量**（这不是 `safe-guard` 的职责，是客户端的事）。
+**注意**：请求大模型厂商的鉴权（`Authorization` / `x-api-key` 头）由客户端自带并原样透传——你需要自己配置好真实的模型 API key。
 
 ### 步骤 4：查记录
 
@@ -161,12 +163,11 @@ curl -X POST http://127.0.0.1:9001/v1/chat/completions \
 safe-guard report
 ```
 
-输出最近 1 小时内的检测结果。如果想立即看到，可以临时调小上报间隔：
+如果想立即看到，可以临时调小上报间隔：
 
 ```bash
 safe-guard config set detector.report_interval_sec 5
 safe-guard restart
-# 然后发请求，5 秒后就能查到
 ```
 
 ### 步骤 5：优雅停止
@@ -187,18 +188,47 @@ safe-guard stop
 
 #### `init` — 初始化配置
 
-非交互式生成 `config.json`。**已存在时需 `--force** 才覆盖。
+生成 `config.json`（**单服务**，监控多个端点用 `service add`）。**已存在时需 `--force` 才覆盖**。
 
 ```bash
-safe-guard init --api-key "<KEY>" --detector-url "<URL>"
-safe-guard init --api-key "<KEY>" --detector-url "<URL>" --force  # 覆盖现有
+safe-guard init --api-key "<KEY>" --detector-url "<URL>" --upstream "<监控端点>"
+safe-guard init --api-key "<KEY>" --detector-url "<URL>" --upstream "<URL>" --force  # 覆盖现有
+
+# 可选参数
+#   --endpoint-type  协议格式（缺省按 URL 猜测）
+#   --name           服务名（缺省用 endpoint_type）
+#   --port           本地端口（默认 9001）
 ```
 
 校验规则：
 - `api_key` 必须 ≥ 8 字符（防止拼写错）
-- `detector-url` 必须以 `http://` 或 `https://` 开头
+- `detector-url` / `upstream` 必须以 `http://` 或 `https://` 开头
+- 非 TTY 且未给 `--upstream` → 报错（upstream 必须显式指定）
 
-错误时退出码 1，stderr 中文错误信息（如 `api_key 长度过短（3 < 8）`）。
+错误时退出码 1，stderr 中文错误信息。
+
+#### `service` — 监控服务管理（子命令组）
+
+```bash
+# 列出所有监控服务（含客户端配置提示）
+safe-guard service list
+
+# 添加（--endpoint-type 缺省按 URL 猜测；--port 缺省从 9001 起自动分配空闲端口）
+safe-guard service add <name> --upstream <URL> [--endpoint-type <T>] [--port <N>]
+safe-guard service add deepseek-claude --upstream https://api.deepseek.com/anthropic
+safe-guard service add local-llm --upstream http://localhost:23333 --port 9010
+
+# 修改（至少一项）
+safe-guard service set <name> [--upstream <URL>] [--port <N>] [--endpoint-type <T>] [--record-body/--no-record-body]
+
+# 移除
+safe-guard service remove <name>
+```
+
+**注意**：
+- 所有修改写入 config.json 后需 `safe-guard restart` 生效
+- `service add/set` 会自动检测 upstream 误配成完整端点 URL（如 `.../v1/chat/completions`）并**警告**（路径重复风险，不阻断）
+- name 重名 / 不存在 → 报错 exit 1
 
 #### `validate` — 校验配置
 
@@ -362,12 +392,15 @@ safe-guard tail --level error            # 按级别过滤（debug/info/warning/
 
 ### 5.2 字段结构
 
+`init` 后的初始配置（单服务）：
+
 ```json
 {
   "config_version": 1,
   "detector": {
     "url": "http://detector.example.com:8080",
     "api_key": "your-api-key-here",
+    "endpoint_path": "/detect",
     "report_interval_sec": 60,
     "batch_size": 500,
     "max_queue_size": 10000
@@ -379,24 +412,38 @@ safe-guard tail --level error            # 按级别过滤（debug/info/warning/
       "upstream": "https://api.openai.com",
       "endpoint_type": "openai-chat-completions",
       "record_body": true
-    },
-    {
-      "name": "openai-responses",
-      "port": 9002,
-      "upstream": "https://api.openai.com",
-      "endpoint_type": "openai-responses",
-      "record_body": true
-    },
-    {
-      "name": "anthropic-messages",
-      "port": 9003,
-      "upstream": "https://api.anthropic.com",
-      "endpoint_type": "anthropic-messages",
-      "record_body": true
     }
   ],
   "log_level": "INFO"
 }
+```
+
+`service add` 加多个端点后的 services 示例（DeepSeek Anthropic 口 + 本地模型）：
+
+```json
+"services": [
+  {
+    "name": "openai-chat-completions",
+    "port": 9001,
+    "upstream": "https://api.openai.com",
+    "endpoint_type": "openai-chat-completions",
+    "record_body": true
+  },
+  {
+    "name": "deepseek-claude",
+    "port": 9002,
+    "upstream": "https://api.deepseek.com/anthropic",
+    "endpoint_type": "anthropic-messages",
+    "record_body": true
+  },
+  {
+    "name": "local-llm",
+    "port": 9003,
+    "upstream": "http://localhost:23333",
+    "endpoint_type": "openai-chat-completions",
+    "record_body": true
+  }
+]
 ```
 
 ### 5.3 detector 段字段
@@ -416,16 +463,35 @@ safe-guard tail --level error            # 按级别过滤（debug/info/warning/
 
 | 字段 | 类型 | 含义 |
 |------|------|------|
-| `name` | string | service 标识，用于日志过滤 |
+| `name` | string | service 标识，用于日志过滤（唯一） |
 | `port` | int | 本地监听端口（0 = 自动分配） |
-| `upstream` | string | 上游 API 地址（流量转发目标） |
-| `endpoint_type` | string | 协议类型（决定 adapter） |
+| `upstream` | string | 上游 base URL（**URL 前缀**，详见下方语义说明） |
+| `endpoint_type` | string | 协议类型（决定 adapter 怎么解析记录） |
 | `record_body` | bool | 是否记录请求/响应体（关掉则只记元数据） |
 
 **支持的 endpoint_type**（v1）：
 - `openai-chat-completions`（OpenAI `/v1/chat/completions`）
 - `openai-responses`（OpenAI `/v1/responses`）
 - `anthropic-messages`（Anthropic `/v1/messages`）
+
+#### upstream 语义（重要）
+
+upstream 是 **URL 前缀**，转发规则：
+
+```
+完整转发地址 = upstream + 客户端请求的原始路径
+```
+
+CLI 不自动加任何后缀——`/v1`、`/chat/completions` 这些路径是客户端 SDK 发请求时自带的，原样透传。所以 upstream 应配到"客户端请求路径之前"为止：
+
+| 你的真实端点 | 客户端 SDK 发的路径 | 应配的 upstream |
+|---|---|---|
+| `https://api.openai.com/v1/chat/completions` | `/v1/chat/completions` | `https://api.openai.com` |
+| `https://api.deepseek.com/anthropic/v1/messages` | `/v1/messages` | `https://api.deepseek.com/anthropic` |
+| `https://opencode.ai/zen/go/v1/chat/completions` | `/chat/completions` | `https://opencode.ai/zen/go/v1` |
+| `http://localhost:23333/v1/chat/completions` | `/v1/chat/completions` | `http://localhost:23333` |
+
+**常见坑（路径重复）**：把完整端点 URL 配进 upstream（如 `http://localhost:23333/v1/chat/completions`），客户端再带一遍路径就变成 `.../v1/chat/completions/v1/chat/completions` → 404。`init` / `service add/set` / `config set` 检测到这种情况会**警告**（不阻断）。
 
 ### 5.5 配置优先级
 
@@ -496,6 +562,27 @@ curl -X POST http://127.0.0.1:9001/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}'
 ```
+
+### 6.5 其他厂商 / 本地模型（OpenAI / Anthropic 兼容端点）
+
+任何兼容端点都能监控——加一个 service，把客户端指到它的本地端口：
+
+```bash
+# DeepSeek 的 Anthropic 兼容口（Claude Code 走它）
+safe-guard service add deepseek-claude --upstream https://api.deepseek.com/anthropic
+#   → 本地 127.0.0.1:9002，ANTHROPIC_BASE_URL=http://127.0.0.1:9002
+
+# 本地部署模型（LM Studio / Ollama / vLLM 等）
+safe-guard service add local-llm --upstream http://localhost:23333 --port 9010
+#   → 本地 127.0.0.1:9010，OPENAI_BASE_URL=http://127.0.0.1:9010/v1
+
+# 中转站 / 网关
+safe-guard service add zen --upstream https://opencode.ai/zen/go/v1 --port 9020
+
+safe-guard restart
+```
+
+然后按 `service list` 输出的客户端配置提示设置对应环境变量即可。
 
 ---
 

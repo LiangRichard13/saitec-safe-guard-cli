@@ -30,18 +30,18 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_init_noninteractive_creates_config(isolated: Path) -> None:
     result = runner.invoke(
-        app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://detector:8080"]
+        app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://detector:8080", "--upstream", "http://127.0.0.1:9999"]
     )
     assert result.exit_code == 0
     cfg = json.loads((isolated / "config.json").read_text())
     assert cfg["detector"]["url"] == "http://detector:8080"
     assert cfg["detector"]["api_key"] == "sk-test-12345678"
-    assert len(cfg["services"]) == 3  # 默认 3 个服务
+    assert len(cfg["services"]) == 1  # init 单服务（多端点用 service add）
 
 
 def test_init_refuses_overwrite_without_force(isolated: Path) -> None:
     (isolated / "config.json").write_text("{}")
-    result = runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d"])
+    result = runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d", "--upstream", "http://127.0.0.1:9999"])
     assert "已存在" in result.stderr
     assert (isolated / "config.json").read_text() == "{}"  # 未覆盖
 
@@ -49,7 +49,7 @@ def test_init_refuses_overwrite_without_force(isolated: Path) -> None:
 def test_init_force_overwrites(isolated: Path) -> None:
     (isolated / "config.json").write_text("{}")
     result = runner.invoke(
-        app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d", "--force"]
+        app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d", "--upstream", "http://127.0.0.1:9999", "--force"]
     )
     assert result.exit_code == 0
     cfg = json.loads((isolated / "config.json").read_text())
@@ -58,7 +58,7 @@ def test_init_force_overwrites(isolated: Path) -> None:
 
 def test_init_missing_api_key(isolated: Path) -> None:
     result = runner.invoke(
-        app, ["init", "--detector-url", "http://detector:8080"],
+        app, ["init", "--detector-url", "http://detector:8080", "--upstream", "http://127.0.0.1:9999"],
         input="\n",  # stdin 非 TTY → _prompt 返回默认，api_key 空
     )
     assert result.exit_code == 1  # P1-10：用户错误 → exit 1
@@ -71,7 +71,7 @@ def test_init_missing_api_key(isolated: Path) -> None:
 
 
 def test_validate_ok(isolated: Path) -> None:
-    runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d:8080"])
+    runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d:8080", "--upstream", "http://127.0.0.1:9999"])
     result = runner.invoke(app, ["validate"])
     assert result.exit_code == 0
     assert "valid" in result.stdout
@@ -99,7 +99,7 @@ def test_validate_invalid_config(isolated: Path) -> None:
 
 @pytest.fixture
 def ready_config(isolated: Path) -> Path:
-    runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d:8080"])
+    runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d:8080", "--upstream", "http://127.0.0.1:9999"])
     return isolated
 
 
@@ -204,7 +204,7 @@ def test_status_json_shape(ready_config: Path) -> None:
     data = json.loads(result.stdout)
     assert data["ok"] is True
     assert "services" in data["data"]
-    assert len(data["data"]["services"]) == 3
+    assert len(data["data"]["services"]) == 1
 
 
 # ============================================================
@@ -494,7 +494,7 @@ def test_start_success_mock(ready_config: Path, monkeypatch: pytest.MonkeyPatch)
     assert data["ok"] is True
     assert data["data"]["started"] is True
     assert data["data"]["pid"] == 12345
-    assert len(data["data"]["services"]) == 3
+    assert len(data["data"]["services"]) == 1
 
 
 def test_stop_not_running(ready_config: Path) -> None:

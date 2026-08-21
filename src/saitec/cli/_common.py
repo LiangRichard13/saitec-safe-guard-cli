@@ -185,3 +185,46 @@ def records_dir_for(config_path: Path) -> Path:
 
 def db_path_for(config_path: Path) -> Path:
     return config_path.parent / "results.db"
+
+
+# ============================================================
+# 服务映射展示
+# ============================================================
+
+
+def client_base_url(endpoint_type: str, port: int) -> str:
+    """按 endpoint_type 给出客户端应配置的本地 base_url
+
+    - openai 系：SDK 习惯 base_url 以 /v1 结尾（请求时拼 /chat/completions）
+    - anthropic 系：SDK 只要 host（请求时自拼 /v1/messages）
+    """
+    if endpoint_type == "anthropic-messages":
+        return f"http://127.0.0.1:{port}"
+    return f"http://127.0.0.1:{port}/v1"
+
+
+def client_env_hint(endpoint_type: str, port: int) -> str:
+    """按 endpoint_type 给出客户端环境变量配置提示"""
+    if endpoint_type == "anthropic-messages":
+        return f"ANTHROPIC_BASE_URL={client_base_url(endpoint_type, port)}"
+    return f"OPENAI_BASE_URL={client_base_url(endpoint_type, port)}"
+
+
+def format_services_block(services: list[dict]) -> str:
+    """人类可读的服务映射块：name / 客户端地址 / 本地端口 / 真实上游
+
+    services 元素字段：name / port / upstream / endpoint_type（来自
+    EndpointSpec asdict 或 config 解析后的 dict）。
+    """
+    if not services:
+        return "服务映射: （无服务，用 `safe-guard service add` 添加）"
+    lines = ["服务映射（客户端 base_url → 本地端口 → 真实上游）:"]
+    for i, s in enumerate(services, 1):
+        port = s.get("port", 0)
+        port_str = str(port) if port else "自动分配"
+        lines.append(
+            f"  {i}. {s.get('name', '?')}  [{s.get('endpoint_type', '?')}]"
+            f"  127.0.0.1:{port_str}  →  {s.get('upstream', '?')}"
+        )
+        lines.append(f"     客户端配置: {client_env_hint(s.get('endpoint_type', ''), port)}")
+    return "\n".join(lines)

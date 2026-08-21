@@ -11,7 +11,9 @@ import typer
 from .._common import (
     EXIT_OK,
     EXIT_RUNTIME_ERROR,
+    client_env_hint as _client_env_hint,
     emit,
+    format_services_block,
     get_config_path,
     is_pid_alive,
     read_pid,
@@ -109,12 +111,38 @@ def start_cmd(
 
     write_pid(path, proc.pid)
 
-    emit(json_output=json_output,
-         data={
-             "started": True,
-             "pid": proc.pid,
-             "config_path": str(path),
-             "services": [{"name": s.name, "port": s.port} for s in config.services],
-             "log_file": str(path.parent / "logs" / "safe-guard.log"),
-             "applied_overrides": env_overrides,
-         })
+    services_list = [
+        {
+            "name": s.name,
+            "port": s.port,
+            "upstream": s.upstream,
+            "endpoint_type": s.endpoint_type,
+        }
+        for s in config.services
+    ]
+    if json_output:
+        emit(json_output=True,
+             data={
+                 "started": True,
+                 "pid": proc.pid,
+                 "config_path": str(path),
+                 "services": services_list,
+                 "client_hint": {
+                     s["name"]: _client_env_hint(s["endpoint_type"], s["port"])
+                     for s in services_list
+                 },
+                 "log_file": str(path.parent / "logs" / "safe-guard.log"),
+                 "applied_overrides": env_overrides,
+             })
+    else:
+        print(f"started: True")
+        print(f"pid: {proc.pid}")
+        print(f"config_path: {path}")
+        print()
+        print(format_services_block(services_list))
+        print()
+        print(f"log_file: {path.parent / 'logs' / 'safe-guard.log'}")
+        if env_overrides:
+            print(f"applied_overrides: {env_overrides}")
+        print()
+        print("把客户端 base_url 指到上面的本地地址即可开始监控。")

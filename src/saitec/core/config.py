@@ -59,6 +59,45 @@ _VALID_ENDPOINT_TYPES = frozenset(
     {"openai-chat-completions", "openai-responses", "anthropic-messages"}
 )
 
+# upstream 末尾的端点特征后缀（配了会导致转发路径重复）
+_ENDPOINT_PATH_SUFFIXES = (
+    "/chat/completions",
+    "/completions",
+    "/messages",
+    "/responses",
+)
+
+
+def upstream_endpoint_warning(url: str) -> str | None:
+    """检测 upstream 是否误配成完整端点 URL（转发会路径重复）
+
+    upstream 语义是 URL 前缀：完整转发地址 = upstream + 客户端请求路径。
+    若 upstream 以 /chat/completions 等端点后缀结尾，客户端再带一遍路径
+    就会重复（如 /v1/chat/completions/v1/chat/completions）→ 404。
+    返回警告文案；无问题返回 None。仅警告不阻断（存在路径真的长这样的网关）。
+    """
+    path = urlparse(url).path.rstrip("/")
+    for suffix in _ENDPOINT_PATH_SUFFIXES:
+        if path.endswith(suffix):
+            return (
+                f"upstream 末尾的 '{suffix}' 疑似端点路径：upstream 是 base URL 前缀，"
+                f"客户端请求路径会拼在它后面，可能导致路径重复（404）。"
+                f"如真实端点就是 '{url}'，请改成去掉 '{suffix}' 的前缀形式"
+            )
+    return None
+
+
+def guess_endpoint_type(upstream_url: str) -> str:
+    """按 upstream URL 启发式猜测 endpoint_type
+
+    含 'anthropic' → anthropic-messages；否则默认 openai-chat-completions
+    （OpenAI 兼容格式最通用，绝大多数中转站/本地模型走它）。
+    """
+    lowered = upstream_url.lower()
+    if "anthropic" in lowered:
+        return "anthropic-messages"
+    return "openai-chat-completions"
+
 
 # ============================================================
 # 内部辅助

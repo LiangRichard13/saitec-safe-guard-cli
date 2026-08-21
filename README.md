@@ -9,11 +9,19 @@
 ```bash
 pip install saitec-safe-guard-cli
 
-safe-guard init --api-key "<KEY>" --detector-url "http://detector:8080"
+# --upstream 指明要监控的大模型端点（官方 / 其他厂商兼容口 / 本地模型均可）
+safe-guard init --api-key "<KEY>" --detector-url "http://detector:8080" \
+    --upstream "https://api.deepseek.com/anthropic"
+
+# 要监控更多端点？逐个加：
+safe-guard service add local-llm --upstream http://localhost:23333
+
 safe-guard start
 
-# 把客户端的 base_url 改到 http://127.0.0.1:9001 等端口即可
+# 按输出提示把客户端 base_url 指到本地端口即可（OPENAI_BASE_URL / ANTHROPIC_BASE_URL）
 ```
+
+支持的 upstream 形态：官方端点（`https://api.openai.com`）、厂商兼容口（`https://api.deepseek.com/anthropic`）、中转网关（`https://opencode.ai/zen/go/v1`）、本地模型（`http://localhost:23333`）——任何 OpenAI / Anthropic 兼容端点。
 
 详细使用见 **[`docs/user-guide.md`](docs/user-guide.md)**——含完整命令参考、配置详解、集成示例（Claude Code / Codex / 自写客户端）、排错手册、安全注意事项。
 
@@ -29,7 +37,7 @@ safe-guard start
 
 | 类别 | 命令 |
 |---|---|
-| 配置 | `init` · `validate` · `config get/set/unset/list` |
+| 配置 | `init` · `validate` · `config get/set/unset/list` · `service add/remove/set/list` |
 | 生命周期 | `start` · `stop` · `restart` · `status` · `logs` |
 | 运维 | `report` · `redo` · `purge` |
 | 调试 | `doctor` · `tail` |

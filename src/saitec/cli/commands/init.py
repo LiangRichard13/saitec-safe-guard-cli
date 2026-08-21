@@ -13,38 +13,25 @@ from .._common import (
     EXIT_INTERNAL_ERROR,
     EXIT_USER_ERROR,
     emit,
+    format_services_block,
     get_config_path,
 )
+from ...core.config import guess_endpoint_type, upstream_endpoint_warning
 from ...core.paths import ensure_dirs
 from ...core.utils import now_iso8601
 
-# 默认服务模板（一个端点一个默认服务）
-DEFAULT_SERVICES = [
-    {
-        "name": "openai-chat-completions",
-        "port": 9001,
-        "upstream": "https://api.openai.com",
-        "endpoint_type": "openai-chat-completions",
-        "record_body": True,
-    },
-    {
-        "name": "openai-responses",
-        "port": 9002,
-        "upstream": "https://api.openai.com",
-        "endpoint_type": "openai-responses",
-        "record_body": True,
-    },
-    {
-        "name": "anthropic-messages",
-        "port": 9003,
-        "upstream": "https://api.anthropic.com",
-        "endpoint_type": "anthropic-messages",
-        "record_body": True,
-    },
-]
+_VALID_ENDPOINT_TYPES = (
+    "openai-chat-completions",
+    "openai-responses",
+    "anthropic-messages",
+)
 
 
-def _build_default_config(detector_url: str, api_key: str) -> dict:
+def _build_default_config(
+    detector_url: str,
+    api_key: str,
+    service: dict,
+) -> dict:
     return {
         "config_version": 1,
         "detector": {
@@ -55,7 +42,7 @@ def _build_default_config(detector_url: str, api_key: str) -> dict:
             "batch_size": 500,
             "max_queue_size": 10000,
         },
-        "services": DEFAULT_SERVICES,
+        "services": [service],
         "log_level": "INFO",
     }
 
@@ -102,11 +89,29 @@ def init_cmd(
         envvar="SAITEC_DETECTOR_URL",
         help="检测服务器地址",
     ),
+    upstream: str | None = typer.Option(
+        None,
+        "--upstream",
+        "-u",
+        help="要监控的上游 base URL（如 https://api.deepseek.com/anthropic、http://localhost:23333）",
+    ),
+    endpoint_type: str | None = typer.Option(
+        None,
+        "--endpoint-type",
+        "-t",
+        help=f"协议格式：{' / '.join(_VALID_ENDPOINT_TYPES)}（缺省按 upstream URL 猜测）",
+    ),
+    name: str | None = typer.Option(
+        None, "--name", help="服务名（缺省用 endpoint_type）"
+    ),
+    port: int = typer.Option(
+        9001, "--port", "-p", help="本地监听端口（默认 9001）"
+    ),
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
     force: bool = typer.Option(False, "--force", help="覆盖已存在的 config.json"),
 ) -> None:
-    """生成 config.json（默认到 platformdirs 用户目录；可显式 --config 覆盖）"""
+    """生成 config.json（单服务；监控更多端点用 `safe-guard service add`）"""
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     if path.exists() and not force:
@@ -127,6 +132,12 @@ def init_cmd(
     # 2. api_key：--api-key > 交互
     if api_key is None:
         api_key = _prompt("X-API-Key", secret=True)
+    # 3. upstream：--upstream > 交互（TTY）> 报错（非 TTY）
+    if upstream is None:
+        upstream = _prompt(
+            "要监控的上游 base URL (upstream)\n"
+            "  例: https://api.openai.com / https://api.deepseek.com/anthropic / http://localhost:23333"
+        )
 
     if not api_key:
         emit(
@@ -140,6 +151,19 @@ def init_cmd(
         )
         return
 
+    if not upstream:
+        emit(
+            json_output=json_output,
+            ok=False,
+            error={
+                "code": "MISSING_UPSTREAM",
+                "message": "缺少 upstream：用 --upstream 指定要监控的上游 base URL"
+                          "（如 https://api.deepseek.com/anthropic、http://localhost:23333）",
+            },
+            exit_code=EXIT_USER_ERROR,
+        )
+        return
+
     # 简单格式校验：避免空白 / 极短字符串写入配置后才发现
     if not detector_url or not detector_url.startswith(("http://", "https://")):
         emit(
@@ -148,6 +172,17 @@ def init_cmd(
             error={
                 "code": "INVALID_DETECTOR_URL",
                 "message": f"detector URL 必须以 http:// 或 https:// 开头: {detector_url!r}",
+            },
+            exit_code=EXIT_USER_ERROR,
+        )
+        return
+    if not upstream.startswith(("http://", "https://")):
+        emit(
+            json_output=json_output,
+            ok=False,
+            error={
+                "code": "INVALID_UPSTREAM",
+                "message": f"upstream 必须以 http:// 或 https:// 开头: {upstream!r}",
             },
             exit_code=EXIT_USER_ERROR,
         )
@@ -166,7 +201,31 @@ def init_cmd(
         return
     api_key = api_key_stripped
 
-    config = _build_default_config(detector_url, api_key)
+    # endpoint_type：显式 > URL 启发式
+    guessed = False
+    if endpoint_type is None:
+        endpoint_type = guess_endpoint_type(upstream)
+        guessed = True
+    if endpoint_type not in _VALID_ENDPOINT_TYPES:
+        emit(
+            json_output=json_output,
+            ok=False,
+            error={
+                "code": "INVALID_ENDPOINT_TYPE",
+                "message": f"endpoint_type 必须是 {' / '.join(_VALID_ENDPOINT_TYPES)}，got {endpoint_type!r}",
+            },
+            exit_code=EXIT_USER_ERROR,
+        )
+        return
+
+    service = {
+        "name": name or endpoint_type,
+        "port": port,
+        "upstream": upstream,
+        "endpoint_type": endpoint_type,
+        "record_body": True,
+    }
+    config = _build_default_config(detector_url, api_key, service)
 
     try:
         ensure_dirs()
@@ -181,13 +240,40 @@ def init_cmd(
         )
         return
 
-    emit(
-        json_output=json_output,
-        data={
-            "config_path": str(path),
-            "detector_url": detector_url,
-            "services": len(config["services"]),
-            "created_at": now_iso8601(),
-            "warning": "建议在 Windows 上用 icacls 限制 config.json 权限" if os.name == "nt" else None,
-        },
-    )
+    warnings: list[str] = []
+    w = upstream_endpoint_warning(upstream)
+    if w:
+        warnings.append(w)
+        if not json_output:
+            print(f"警告: {w}", file=sys.stderr)
+
+    if json_output:
+        emit(
+            json_output=True,
+            data={
+                "config_path": str(path),
+                "detector_url": detector_url,
+                "services": [service],
+                "endpoint_type_guessed": guessed,
+                "warnings": warnings,
+                "created_at": now_iso8601(),
+                "next_steps": [
+                    "监控更多端点: safe-guard service add <name> --upstream <URL>",
+                    "启动服务: safe-guard start",
+                ],
+            },
+        )
+    else:
+        print(f"config_path: {path}")
+        print(f"detector_url: {detector_url}")
+        if guessed:
+            print(f"endpoint_type: {endpoint_type}（按 upstream URL 猜测，可用 --endpoint-type 显式指定）")
+        print()
+        print(format_services_block([service]))
+        print()
+        print("下一步:")
+        print("  - 监控更多端点: safe-guard service add <name> --upstream <URL>")
+        print("  - 启动服务:     safe-guard start")
+        if os.name == "nt":
+            print()
+            print("警告: 建议在 Windows 上用 icacls 限制 config.json 权限", file=sys.stderr)

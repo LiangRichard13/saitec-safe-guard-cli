@@ -10,6 +10,7 @@ import copy
 import json
 import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,7 @@ from .._common import (
     format_errors,
     get_config_path,
 )
-from ...core.config import validate_config
+from ...core.config import upstream_endpoint_warning, validate_config
 from ...core.models import AppConfig, DetectorConfig, EndpointSpec
 from ...core.utils import now_iso8601
 
@@ -240,6 +241,8 @@ def set_cmd(
              exit_code=EXIT_USER_ERROR)
         return
 
+    key_lower = key.lower()
+
     # 校验
     try:
         model = _raw_to_model(data)
@@ -267,9 +270,20 @@ def set_cmd(
              exit_code=EXIT_USER_ERROR)
         return
 
-    emit(json_output=json_output,
-         data={"key": key, "value": parsed, "saved": True,
-               "note": "修改已保存。重启后生效（safe-guard restart）"})
+    # upstream 防呆：检测误配成完整端点 URL（路径重复 → 404）
+    warnings: list[str] = []
+    if key_lower.endswith(".upstream") and isinstance(parsed, str):
+        w = upstream_endpoint_warning(parsed)
+        if w:
+            warnings.append(w)
+            if not json_output:
+                print(f"警告: {w}", file=sys.stderr)
+
+    result: dict[str, Any] = {"key": key, "value": parsed, "saved": True,
+                              "note": "修改已保存。重启后生效（safe-guard restart）"}
+    if warnings and json_output:
+        result["warnings"] = warnings
+    emit(json_output=json_output, data=result)
 
 
 @app.command(name="unset")

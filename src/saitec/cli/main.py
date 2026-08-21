@@ -11,7 +11,7 @@ from pathlib import Path
 
 import typer
 
-from .commands import config_cmd, doctor, init, logs, purge, redo, report, restart, start, status, stop, tail, validate
+from .commands import config_cmd, doctor, init, logs, purge, redo, report, restart, service_cmd, start, status, stop, tail, validate
 
 
 def _configure_io_encoding() -> None:
@@ -81,6 +81,9 @@ app.command(name="purge")(purge.purge)
 
 # config 子命令组（get / set / unset / list）
 app.add_typer(config_cmd.app, name="config")
+
+# service 子命令组（add / remove / set / list）
+app.add_typer(service_cmd.app, name="service")
 
 
 if __name__ == "__main__":
