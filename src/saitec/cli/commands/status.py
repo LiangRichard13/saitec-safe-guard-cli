@@ -47,7 +47,8 @@ def status_cmd(
         "pid": pid if running else None,
         "config_path": str(path),
         "services": services,
-        "queue_depth": "N/A",  # 运行中的真实值需 `safe-guard tail` 或日志观察
+        # queue_depth 字段需要 runtime 进程实时状态（IPC），当前 status 命令
+        # 通过 PID 文件从外部读取，无法获取。先不返回此字段以免误导。
     }
 
     # 附加日志尾部（错误时有用）

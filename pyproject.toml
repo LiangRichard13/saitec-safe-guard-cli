@@ -27,6 +27,8 @@ dev = [
 mock = [
     "fastapi>=0.117",
     "uvicorn[standard]>=0.27",
+    # starlette 新版 TestClient 依赖 httpx（mock 服务器自身接口测试用）
+    "httpx>=0.27",
 ]
 
 [project.scripts]

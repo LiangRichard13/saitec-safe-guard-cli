@@ -90,7 +90,8 @@ class Reporter:
                 if resp.status in (401, 403):
                     raise ReportError(
                         ReportErrorKind.AUTH,
-                        f"auth failed ({resp.status})",
+                        f"auth failed ({resp.status}) at {url}; 检查 detector.api_key 是否与检测服务器一致，"
+                        f"需要重设请用 `safe-guard init --api-key ... --detector-url ... --force`",
                     )
                 if 400 <= resp.status < 500:
                     body = await resp.text()

@@ -30,18 +30,18 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_init_noninteractive_creates_config(isolated: Path) -> None:
     result = runner.invoke(
-        app, ["init", "--api-key", "sk-test", "--detector-url", "http://detector:8080"]
+        app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://detector:8080"]
     )
     assert result.exit_code == 0
     cfg = json.loads((isolated / "config.json").read_text())
     assert cfg["detector"]["url"] == "http://detector:8080"
-    assert cfg["detector"]["api_key"] == "sk-test"
+    assert cfg["detector"]["api_key"] == "sk-test-12345678"
     assert len(cfg["services"]) == 3  # 默认 3 个服务
 
 
 def test_init_refuses_overwrite_without_force(isolated: Path) -> None:
     (isolated / "config.json").write_text("{}")
-    result = runner.invoke(app, ["init", "--api-key", "x", "--detector-url", "http://d"])
+    result = runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d"])
     assert "已存在" in result.stderr
     assert (isolated / "config.json").read_text() == "{}"  # 未覆盖
 
@@ -49,11 +49,11 @@ def test_init_refuses_overwrite_without_force(isolated: Path) -> None:
 def test_init_force_overwrites(isolated: Path) -> None:
     (isolated / "config.json").write_text("{}")
     result = runner.invoke(
-        app, ["init", "--api-key", "x", "--detector-url", "http://d", "--force"]
+        app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d", "--force"]
     )
     assert result.exit_code == 0
     cfg = json.loads((isolated / "config.json").read_text())
-    assert cfg["detector"]["api_key"] == "x"
+    assert cfg["detector"]["api_key"] == "sk-test-12345678"
 
 
 def test_init_missing_api_key(isolated: Path) -> None:
@@ -71,7 +71,7 @@ def test_init_missing_api_key(isolated: Path) -> None:
 
 
 def test_validate_ok(isolated: Path) -> None:
-    runner.invoke(app, ["init", "--api-key", "sk", "--detector-url", "http://d:8080"])
+    runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d:8080"])
     result = runner.invoke(app, ["validate"])
     assert result.exit_code == 0
     assert "valid" in result.stdout
@@ -99,7 +99,7 @@ def test_validate_invalid_config(isolated: Path) -> None:
 
 @pytest.fixture
 def ready_config(isolated: Path) -> Path:
-    runner.invoke(app, ["init", "--api-key", "sk", "--detector-url", "http://d:8080"])
+    runner.invoke(app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d:8080"])
     return isolated
 
 
@@ -142,7 +142,7 @@ def test_config_set_invalid_value_rollback(ready_config: Path) -> None:
     result = runner.invoke(app, ["config", "set", "detector.api_key", ""])
     assert result.exit_code == 1
     cfg = json.loads((ready_config / "config.json").read_text())
-    assert cfg["detector"]["api_key"] == "sk"  # 未变
+    assert cfg["detector"]["api_key"] == "sk-test-12345678"  # 未变
 
 
 def test_config_unset(ready_config: Path) -> None:
@@ -184,7 +184,7 @@ def test_config_list_redacts_api_key(ready_config: Path) -> None:
     data = json.loads(result.stdout)
     api_key_val = data["data"]["config"]["detector.api_key"]["value"]
     assert "***" in api_key_val  # 脱敏标记
-    full_key = "sk"  # 测试 fixture 用的明文
+    full_key = "sk-test-12345678"  # 测试 fixture 用的明文
     assert full_key not in result.stdout  # 完整明文不得出现
 
 

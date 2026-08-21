@@ -139,6 +139,32 @@ def init_cmd(
         )
         return
 
+    # 简单格式校验：避免空白 / 极短字符串写入配置后才发现
+    if not detector_url or not detector_url.startswith(("http://", "https://")):
+        emit(
+            json_output=json_output,
+            ok=False,
+            error={
+                "code": "INVALID_DETECTOR_URL",
+                "message": f"detector URL 必须以 http:// 或 https:// 开头: {detector_url!r}",
+            },
+            exit_code=EXIT_USER_ERROR,
+        )
+        return
+    api_key_stripped = api_key.strip()
+    if len(api_key_stripped) < 8:
+        emit(
+            json_output=json_output,
+            ok=False,
+            error={
+                "code": "INVALID_API_KEY",
+                "message": f"api_key 长度过短（{len(api_key_stripped)} < 8），请确认是否填写完整",
+            },
+            exit_code=EXIT_USER_ERROR,
+        )
+        return
+    api_key = api_key_stripped
+
     config = _build_default_config(detector_url, api_key)
 
     try:

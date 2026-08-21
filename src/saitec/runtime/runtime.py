@@ -244,7 +244,10 @@ class Runtime:
             except ReportError as e:
                 if e.kind == ReportErrorKind.AUTH:
                     self._auth_failed = True
-                    logger.error("X-API-Key 失效，停止上报：请重新 init")
+                    # 把 reporter 的具体原因（含 URL / 排查建议）带出来
+                    logger.error(
+                        "X-API-Key 失效，停止上报：%s", e.message
+                    )
                     return
                 logger.warning(
                     "report failed (kind=%s): %s; %d 条记录保留待重试; backoff=%ds",
@@ -313,7 +316,7 @@ class Runtime:
                         except ReportError as e:
                             if e.kind == ReportErrorKind.AUTH:
                                 self._auth_failed = True
-                                logger.error("续传时 auth 失败，停止续传")
+                                logger.error("续传时 auth 失败，停止续传: %s", e.message)
                                 return
                             logger.warning("续传单条失败: %s — %s", rec_id, e.message)
             except OSError:

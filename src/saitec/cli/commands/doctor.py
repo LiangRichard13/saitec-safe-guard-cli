@@ -2,27 +2,41 @@
 from __future__ import annotations
 
 import shutil
-import sqlite3
 import socket
+import sqlite3
 from pathlib import Path
 
 import typer
 
-from .._common import emit, get_config_path, EXIT_USER_ERROR
+from .._common import emit, get_config_path, is_pid_alive, read_pid, EXIT_USER_ERROR
 from ...core.config import load_config_json
 
 
-def _check_port_free(port: int) -> bool:
+def _check_port(port: int, service_running: bool) -> tuple[bool, str]:
+    """端口检查：服务运行时验证被监听，未运行时验证可绑
+
+    返回 (ok, detail)。语义：
+    - 服务在跑：端口被监听 = ok；连不上 = fail（service 应监听却没监听）
+    - 服务没跑：端口可绑 = ok；被占用 = fail（启动将冲突）
+    """
     if port == 0:
-        return True
+        return True, "自动分配（无可用性概念）"
+    if service_running:
+        # 尝试连接：能连上 → 端口被监听；连不上 → fail
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1.0):
+                return True, "已被 service 监听"
+        except OSError as e:
+            return False, f"服务在跑但端口连不上: {e}"
+    # 未运行：尝试 bind
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("127.0.0.1", port))
         s.close()
-        return True
-    except OSError:
-        return False
+        return True, "端口空闲（可启动）"
+    except OSError as e:
+        return False, f"端口已被其它进程占用: {e}"
 
 
 def doctor(
@@ -55,12 +69,14 @@ def doctor(
         return
 
     # 2. 端口可绑（每个服务）
+    pid = read_pid(path)
+    service_running = pid is not None and is_pid_alive(pid)
     for svc in config.services:
-        ok = _check_port_free(svc.port)
+        ok, detail = _check_port(svc.port, service_running)
         checks.append({
             "name": f"port:{svc.port}",
             "status": "ok" if ok else "fail",
-            "detail": f"{svc.name} ({svc.endpoint_type})",
+            "detail": f"{svc.name} ({svc.endpoint_type}) — {detail}",
         })
 
     # 3. 磁盘空间（数据目录所在盘 ≥ 1GB）

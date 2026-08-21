@@ -553,8 +553,8 @@ async def test_replay_unreported_on_restart(
             "response": {"content": "x"},
         }
 
-    ts_old = "2026-08-20T10:00:00Z"
-    ts_new = "2026-08-20T10:01:00Z"
+    ts_old = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
+    ts_new = datetime.now(timezone.utc).isoformat()
     jsonl = records_dir / "records-2026-08-20.jsonl"
     jsonl.write_text(
         json.dumps(_mk_record("r_old", ts_old)) + "\n"
@@ -572,7 +572,7 @@ async def test_replay_unreported_on_restart(
             ReportCursor(
                 last_record_id="r_old",
                 last_timestamp=ts_old,
-                updated_at="2026-08-20T10:00:05Z",
+                updated_at=datetime.now(timezone.utc).isoformat(),
             )
         )
         # 清空 recorder 内存队列（避免自动上报反而把 r_new 报了）

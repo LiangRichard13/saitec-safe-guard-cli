@@ -11,7 +11,10 @@ import signal
 import sys
 from pathlib import Path
 
-from ..runtime.runtime import Runtime
+# _serve.py 被 `safe-guard start` 以独立脚本方式（`python _serve.py <config>`）
+# 调用，此时相对导入（`from ..runtime...`）没有父包会 ImportError，
+# 因此这里用绝对导入（前提：saitec 已 pip 安装，见 pyproject 的 [project.scripts]）。
+from saitec.runtime.runtime import Runtime
 
 
 STOP_FLAG_NAME = "safe-guard.stop.flag"
