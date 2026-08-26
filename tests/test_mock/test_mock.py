@@ -338,3 +338,107 @@ def test_evaluate_llm_parses_markdown_wrapped_json(
     assert result["detection_status"] == "violation"
     assert result["risk_level"] == "high"
     assert result["detection_detail"]["reason"] == "PII"
+
+
+# ============================================================
+# llm 模式：前缀 hash 缓存去重（同会话 O(N²) → O(N)）
+# ============================================================
+
+
+class _RecordingLLM:
+    """假 LLM：记录每次收到的 user 内容，返回固定 clean 结论"""
+
+    calls: list[str] = []
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content":
+                '{"detection_status": "clean", "risk_level": "low", "reason": "pass"}'}}]}
+
+    def __init__(self, *a, **k):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def post(self, url, json=None, **k):
+        _RecordingLLM.calls.append(json["messages"][1]["content"])
+        return self._Resp()
+
+
+@pytest.fixture
+def llm_dedup_env(monkeypatch: pytest.MonkeyPatch):
+    """清空缓存与统计 + 挂假 LLM"""
+    mock_server._prefix_cache.clear()  # noqa: SLF001
+    for k in mock_server._cache_stats:  # noqa: SLF001
+        mock_server._cache_stats[k] = 0  # noqa: SLF001
+    _RecordingLLM.calls.clear()
+    monkeypatch.setattr(mock_server.httpx, "AsyncClient", _RecordingLLM)
+    monkeypatch.setattr(mock_server, "DETECTION_MODE", "llm")
+
+
+def _session_record(rid: str, turns: list[dict]) -> dict:
+    """构造同会话递增 Record：第 N 条含前 N 轮全部 messages"""
+    return {
+        "record_id": rid,
+        "request": {"messages": turns},
+        "response": {"content": f"reply-{rid}"},
+    }
+
+
+def test_llm_prefix_cache_dedup(llm_dedup_env) -> None:
+    """同会话递增上报：LLM 只收新增轮次，轮次审读 O(N) 而非 O(N²)"""
+    import asyncio
+
+    t1 = {"role": "user", "content": "第一轮问题"}
+    t2 = {"role": "assistant", "content": "第一轮回答"}
+    t3 = {"role": "user", "content": "第二轮问题"}
+
+    # Record1: 1 轮（miss，全量审）
+    r1 = asyncio.run(mock_server._evaluate_llm(_session_record("r1", [t1])))  # noqa: SLF001
+    assert r1["detection_status"] == "clean"
+    assert mock_server._cache_stats["misses"] == 1  # noqa: SLF001
+    assert len(_RecordingLLM.calls) == 1
+
+    # Record2: 前缀包含 Record1 + 新增 2 轮（partial，只审新增）
+    r2 = asyncio.run(mock_server._evaluate_llm(_session_record("r2", [t1, t2, t3])))  # noqa: SLF001
+    assert mock_server._cache_stats["partial_hits"] == 1  # noqa: SLF001
+    assert len(_RecordingLLM.calls) == 2
+    # LLM 收到的内容：前情提示 + 新增两轮，且不含第一轮旧内容（截断内容里的 key 片段验证）
+    sent = _RecordingLLM.calls[1]
+    assert "前情提示" in sent and "clean" in sent
+    assert "第一轮问题" not in sent          # 旧轮不重发
+    assert "第二轮问题" in sent               # 新轮送审
+    assert r2["detection_detail"]["new_turns"] == 2
+
+    # Record3: 完全重放 Record2 的会话（full hit，不调 LLM）
+    r3 = asyncio.run(mock_server._evaluate_llm(_session_record("r3", [t1, t2, t3])))  # noqa: SLF001
+    assert mock_server._cache_stats["full_hits"] == 1  # noqa: SLF001
+    assert len(_RecordingLLM.calls) == 2                # 没有新调用
+    assert r3["detection_status"] == "clean"
+    assert r3["detection_detail"]["cache"] == "full"
+
+    # 统计：3 条 Record 共 1+3+3=7 轮到达，实送 1+2+0=3 轮
+    s = mock_server._cache_stats  # noqa: SLF001
+    assert s["turns_total"] == 7
+    assert s["turns_sent"] == 3
+    assert s["llm_calls"] == 2
+
+
+def test_llm_prefix_cache_independent_sessions(llm_dedup_env) -> None:
+    """不同会话（前缀不同）互不命中"""
+    import asyncio
+
+    a = asyncio.run(mock_server._evaluate_llm(_session_record(  # noqa: SLF001
+        "a1", [{"role": "user", "content": "会话A第一轮"}])))
+    b = asyncio.run(mock_server._evaluate_llm(_session_record(  # noqa: SLF001
+        "b1", [{"role": "user", "content": "会话B第一轮"}])))
+    assert mock_server._cache_stats["misses"] == 2  # noqa: SLF001
+    assert len(_RecordingLLM.calls) == 2
+    assert a["detection_status"] == "clean" and b["detection_status"] == "clean"

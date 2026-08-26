@@ -32,6 +32,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import random
@@ -134,20 +135,69 @@ def _check_api_key(request: Request) -> None:
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
-def _record_excerpt(record: dict[str, Any]) -> str:
-    """提取 record 的请求/回复内容做 LLM 判定输入（截断防超长）"""
-    req = record.get("request") or {}
-    resp = record.get("response") or {}
+# ============================================================
+# 前缀 hash 缓存（同会话去重，避免 LLM 重复审读历史轮次）
+#
+# 完整快照语义下，第 N 条 Record 包含前 N-1 轮全部内容——不去重时
+# 同一段历史会被 LLM 反复审读 O(N²) 次。这里按 messages 算 hash 链，
+# 已审前缀直接复用结论，只把新增轮次送 LLM（附"前情已审"上下文行），
+# 审读量降为 O(N)。契约不变（去重是 detector 内部优化）。
+# ============================================================
+
+_PREFIX_CACHE_LIMIT = 10000  # 超限整体清空（实验 mock 的简化防呆）
+_prefix_cache: dict[str, dict[str, Any]] = {}  # prefix_hash -> {status, risk_level, reason, turns}
+_cache_stats = {
+    "llm_calls": 0,          # 实际调用 LLM 的次数
+    "records_seen": 0,       # 处理的 Record 总数
+    "full_hits": 0,          # 整条命中（未调 LLM 直接复用结论）
+    "partial_hits": 0,       # 部分命中（只送新增轮次）
+    "misses": 0,             # 无已知前缀（全量送审）
+    "turns_sent": 0,         # 送 LLM 的 message 轮次总数（去重后）
+    "turns_total": 0,        # 到达的 message 轮次总数（去重前）
+}
+
+
+def _hash_chain(messages: list) -> list[str]:
+    """对 messages 算 hash 链：h_k = sha256(h_{k-1} ‖ m_k)。
+
+    h_k 匹配意味着"前 k+1 轮组成的会话前缀"曾出现过（内容级一致）。
+    """
+    chain: list[str] = []
+    prev = ""
+    for m in messages:
+        try:
+            payload = json.dumps(m, ensure_ascii=False, sort_keys=True)
+        except (TypeError, ValueError):
+            payload = str(m)
+        prev = hashlib.sha256((prev + payload).encode("utf-8")).hexdigest()
+        chain.append(prev)
+    return chain
+
+
+def _find_known_prefix(chain: list[str]) -> int:
+    """返回最长已知前缀的长度（0 = 无已知前缀）"""
+    for k in range(len(chain) - 1, -1, -1):
+        if chain[k] in _prefix_cache:
+            return k + 1
+    return 0
+
+
+def _record_excerpt(new_messages: list, context_line: str | None, resp_text: str) -> str:
+    """增量判定输入：只含新增轮次（+ 前情摘要行），截断防超长"""
+    parts: list[str] = []
+    if context_line:
+        parts.append(f"{context_line}\n")
     try:
-        req_text = json.dumps(req, ensure_ascii=False)[:2000]
+        msg_text = json.dumps(new_messages, ensure_ascii=False)[:2000]
     except (TypeError, ValueError):
-        req_text = str(req)[:2000]
-    resp_text = (resp.get("content") or "")[:1000]
-    return f"【请求】\n{req_text}\n\n【模型回复】\n{resp_text or '（无/错误）'}"
+        msg_text = str(new_messages)[:2000]
+    parts.append(f"【本轮新增对话】\n{msg_text}")
+    parts.append(f"\n\n【模型回复】\n{resp_text[:1000] or '（无/错误）'}")
+    return "".join(parts)
 
 
 async def _evaluate_llm(record: dict[str, Any]) -> dict[str, Any]:
-    """把记录内容发给 LLM 判定安全性；失败/超时降级为 error 结论（不阻断上报）"""
+    """LLM 判定（带同会话前缀去重）；失败/超时降级为 error 结论（不阻断上报）"""
     detected_at = datetime.now(timezone.utc).isoformat()
     rid = record.get("record_id")
 
@@ -160,22 +210,59 @@ async def _evaluate_llm(record: dict[str, Any]) -> dict[str, Any]:
             "detected_at": detected_at,
         }
 
+    # ---- 前缀匹配 ----
+    req = record.get("request") or {}
+    resp = record.get("response") or {}
+    messages = req.get("messages") or []
+    _cache_stats["records_seen"] += 1
+    _cache_stats["turns_total"] += len(messages)
+
+    if messages:
+        chain = _hash_chain(messages)
+        known = _find_known_prefix(chain)
+        if known == len(chain):
+            # 整条是已审会话的重放 → 不调 LLM，复用结论
+            _cache_stats["full_hits"] += 1
+            c = _prefix_cache[chain[-1]]
+            return _result(c["status"], c["risk_level"],
+                           {"reason": c["reason"], "model": LLM_MODEL, "cache": "full"})
+        if known > 0:
+            _cache_stats["partial_hits"] += 1
+            new_messages = messages[known:]
+            c = _prefix_cache[chain[known - 1]]
+            context_line = f"【前情提示】前 {known} 轮对话已经过安全审查，结论：{c['status']}" + (
+                f"（{c['reason']}）" if c.get("reason") else "")
+        else:
+            _cache_stats["misses"] += 1
+            new_messages = messages
+            context_line = None
+    else:
+        # 无 messages（如代理错误记录）：审 response 摘要
+        chain = []
+        new_messages = []
+        context_line = None
+        _cache_stats["misses"] += 1
+
+    _cache_stats["turns_sent"] += len(new_messages)
+
     try:
         async with httpx.AsyncClient(timeout=LLM_TIMEOUT_SEC) as client:
-            resp = await client.post(
+            resp_http = await client.post(
                 f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
                 headers={"Authorization": f"Bearer {LLM_API_KEY}"},
                 json={
                     "model": LLM_MODEL,
                     "messages": [
                         {"role": "system", "content": _LLM_SYSTEM_PROMPT},
-                        {"role": "user", "content": _record_excerpt(record)},
+                        {"role": "user", "content": _record_excerpt(
+                            new_messages, context_line, resp.get("content") or "")},
                     ],
                     "temperature": 0,
                 },
             )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
+            resp_http.raise_for_status()
+            content = resp_http.json()["choices"][0]["message"]["content"]
+        _cache_stats["llm_calls"] += 1
     except Exception as e:  # 网络/超时/HTTP 错误统一降级
         return _result(
             "error", None,
@@ -191,22 +278,43 @@ async def _evaluate_llm(record: dict[str, Any]) -> dict[str, Any]:
         status = verdict["detection_status"]
         if status not in ("clean", "violation", "suspicious", "error"):
             status = "error"
-        return _result(status, verdict.get("risk_level"),
-                       {"reason": verdict.get("reason", ""), "model": LLM_MODEL})
     except (KeyError, ValueError, json.JSONDecodeError):
         return _result("error", None,
                        {"reason": f"llm_bad_response: {content[:120]}", "model": LLM_MODEL})
 
+    # 结论落缓存：该会话的每个前缀 hash（含全量）都指向本次综合结论
+    if chain:
+        if len(_prefix_cache) + len(chain) > _PREFIX_CACHE_LIMIT:
+            _prefix_cache.clear()
+        entry = {"status": status, "risk_level": verdict.get("risk_level"),
+                 "reason": verdict.get("reason", ""), "turns": len(messages)}
+        for h in chain:
+            _prefix_cache[h] = entry
+
+    return _result(status, verdict.get("risk_level"),
+                   {"reason": verdict.get("reason", ""), "model": LLM_MODEL,
+                    "new_turns": len(new_messages)})
+
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    """健康检查（不校验 api_key）"""
+    """健康检查（不校验 api_key）；llm 模式附前缀缓存去重统计"""
+    s = _cache_stats
+    dedup = None
+    if DETECTION_MODE == "llm" and s["turns_total"] > 0:
+        dedup = {
+            **s,
+            "cache_entries": len(_prefix_cache),
+            "turns_saved_pct": round(
+                100 * (s["turns_total"] - s["turns_sent"]) / s["turns_total"], 1),
+        }
     return {
         "ok": True,
         "detection_mode": DETECTION_MODE,
         "violation_rate": VIOLATION_RATE,
         "latency_ms": LATENCY_MS,
         "llm_model": LLM_MODEL if DETECTION_MODE == "llm" else None,
+        "llm_dedup": dedup,
         "stored_records": len(_records),
     }
 

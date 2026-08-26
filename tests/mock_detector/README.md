@@ -66,8 +66,11 @@ MOCK_LLM_MODEL=deepseek-chat
 
 - 判定 prompt：要求模型按 prompt injection / PII 泄露 / 敏感内容 / 越权请求四类风险输出 JSON 结论（`clean|violation` + `risk_level` + 中文理由）
 - **批内并发**判定（每条一次 LLM 调用），单条超时独立控制
+- **同会话前缀去重**（重要，省 LLM token）：完整快照语义下第 N 条 Record 包含前 N-1 轮全部内容，不去重时 LLM 重复审读 O(N²)。按 `request.messages` 算 hash 链，已审前缀直接复用结论，**只把新增轮次送 LLM**（附"前情已审：clean"上下文行保留跨轮语义），审读量 O(N)。实测 10 轮递增会话节省 81.8%（50 轮理论 ~96%）
+  - `/health` 的 `llm_dedup` 字段实时暴露统计（llm_calls / full_hits / partial_hits / turns_saved_pct）
+  - 结论缓存进程内（重启清空），上限 10000 前缀防膨胀
 - **失败降级**：LLM 网络/超时/解析失败 → 该条结论为 `detection_status=error`（detail.reason 含失败原因），**不阻断**整批上报——契约与 `docs/integration/detector-api.md` §4.2 一致
-- 注意成本：每条上报记录 = 一次 LLM 调用，大批量（`batch_size=500`）时一次上报可能产生 500 次调用
+- 注意成本：去重后每条新增内容 ≈ 一次小 LLM 调用，但仍随流量线性增长
 
 ## 与 safe-guard 集成
 
