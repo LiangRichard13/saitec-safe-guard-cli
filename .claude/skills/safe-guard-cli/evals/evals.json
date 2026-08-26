@@ -1,0 +1,26 @@
+{
+  "skill_name": "safe-guard-cli",
+  "evals": [
+    {
+      "id": 1,
+      "name": "cold-start-two-services",
+      "prompt": "用 safe-guard CLI 起一套监控（不要影响现有配置，配置放 C:/Users/Administrator/AppData/Local/Temp/sg-eval-1/config.json）：监控两个端点——http://localhost:23333（本地模型，OpenAI 兼容格式）和 https://api.deepseek.com/anthropic（Anthropic 兼容格式，本地端口用 9012），检测服务器 http://127.0.0.1:8000（api_key: mock-test-key）。完成后告诉我：两个客户端分别该配什么 base_url 环境变量，以及当前服务状态。",
+      "expected_output": "隔离配置目录、两个 service（endpoint_type 正确）、给出 client base_url、status 显示 running",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "stale-pid-and-apikey-rotation",
+      "prompt": "safe-guard 出问题了：配置在 C:/Users/Administrator/AppData/Local/Temp/sg-eval-2/config.json，status 说没在跑，但 start 报 ALREADY_RUNNING。另外检测服务器刚换了 api_key，新值是 new-key-12345678，把配置也更新并让所有改动生效。",
+      "expected_output": "清理残留 PID 文件、config set 更新 api_key、restart 或等效生效操作",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "heartbeat-monitoring",
+      "prompt": "帮我设计并落地对 safe-guard 的定时监控（它配置在默认位置）：每 10 分钟检查一次服务是否存活和最近 10 分钟的检测结果，重点是发现 violation 和服务掉线。给出你推荐的完整方案。",
+      "expected_output": "单次检查命令组合（status+report --json）、宿主级调度方案（cron/Monitor）、汇报要点（running/violation），周期与 report_interval_sec 的关系",
+      "files": []
+    }
+  ]
+}

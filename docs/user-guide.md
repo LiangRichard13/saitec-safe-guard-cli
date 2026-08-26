@@ -105,7 +105,7 @@ safe-guard init --api-key "<你的X-API-Key>" \
 输出示例：
 
 ```
-config_path: C:\Users\you\AppData\Local\saitec\safe-guard\config.json
+config_path: C:\Users\you\AppData\Local\saitec\config.json
 detector_url: http://detector.example.com:8080
 endpoint_type: openai-chat-completions（按 upstream URL 猜测，可用 --endpoint-type 显式指定）
 
@@ -394,8 +394,8 @@ safe-guard tail --level error            # 按级别过滤（debug/info/warning/
 2. 环境变量 `SAITEC_CONFIG`
 3. `platformdirs` 用户配置目录（默认）：
    - Windows: `%LOCALAPPDATA%\saitec\safe-guard\config.json`
-   - macOS: `~/Library/Application Support/saitec/safe-guard/config.json`
-   - Linux: `~/.config/saitec/safe-guard/config.json`
+   - macOS: `~/Library/Application Support/saitec/config.json`
+   - Linux: `~/.config/saitec/config.json`
 
 ### 5.2 字段结构
 
