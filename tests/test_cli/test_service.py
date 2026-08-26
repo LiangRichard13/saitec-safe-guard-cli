@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,14 @@ from typer.testing import CliRunner
 from ssgc.cli.main import app
 
 runner = CliRunner()
+
+# rich 在 FORCE_COLOR 环境下会给 URL 加色/链接分段（即使 CliRunner 非 TTY），
+# 纯文本断言前必须剥 ANSI——否则在 CI/Agent 会话（常注入 FORCE_COLOR）下 flaky
+_ANSI_RE = re.compile('\x1b\\[[0-9;]*m')
+
+
+def _plain(s: str) -> str:
+    return _ANSI_RE.sub("", s)
 
 
 @pytest.fixture
@@ -212,9 +221,10 @@ def test_service_set_not_found(ready_config: Path) -> None:
 def test_service_list_human(ready_config: Path) -> None:
     result = runner.invoke(app, ["service", "list"])
     assert result.exit_code == 0
-    assert "服务映射" in result.stdout
-    assert "http://127.0.0.1:9101" in result.stdout  # 显示 upstream
-    assert "OPENAI_BASE_URL=http://127.0.0.1:9001/v1" in result.stdout  # 客户端提示
+    out = _plain(result.stdout)
+    assert "服务映射" in out
+    assert "http://127.0.0.1:9101" in out  # 显示 upstream
+    assert "OPENAI_BASE_URL=http://127.0.0.1:9001/v1" in out  # 客户端提示
 
 
 def test_service_list_json(ready_config: Path) -> None:
