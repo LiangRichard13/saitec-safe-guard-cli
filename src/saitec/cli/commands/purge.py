@@ -1,4 +1,4 @@
-"""purge — 清理过期 JSONL + SQLite"""
+"""purge — 清理过期 JSONL + 日志切割备份 + SQLite"""
 from __future__ import annotations
 
 import sqlite3
@@ -17,7 +17,7 @@ def purge(
     retention_days: int = typer.Option(30, "--retention-days", "-d", help="保留天数（默认 30）"),
     dry_run: bool = typer.Option(False, "--dry-run", help="只显示将要删除的内容，不实际删除"),
 ) -> None:
-    """清理 `retention_days` 之前的 JSONL 文件与 SQLite 记录"""
+    """清理 `retention_days` 之前的 JSONL 文件、日志切割备份与 SQLite 记录"""
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     cutoff_str = cutoff.date().isoformat()
@@ -26,6 +26,7 @@ def purge(
     db_path = path.parent / "results.db"
 
     removed_files: list[str] = []
+    removed_log_files: list[str] = []
     removed_rows = 0
 
     # 1. JSONL 按天分片：文件名 records-YYYY-MM-DD.jsonl
@@ -41,7 +42,18 @@ def purge(
             except ValueError:
                 continue
 
-    # 2. SQLite：删除 timestamp < cutoff 的记录
+    # 2. 日志切割备份：文件名 safe-guard.log.YYYY-MM-DD，按日期 < cutoff 清理。
+    #    活跃的 safe-guard.log（无日期后缀）不删——可能正被 _serve 子进程写入。
+    logs_dir = path.parent / "logs"
+    if logs_dir.exists():
+        for f in sorted(logs_dir.glob("safe-guard.log.*")):
+            date_part = f.name.replace("safe-guard.log.", "")
+            if len(date_part) == 10 and date_part < cutoff_str:  # YYYY-MM-DD
+                removed_log_files.append(f.name)
+                if not dry_run:
+                    f.unlink(missing_ok=True)
+
+    # 3. SQLite：删除 timestamp < cutoff 的记录
     if db_path.exists() and not dry_run:
         try:
             with sqlite3.connect(db_path) as conn:
@@ -60,5 +72,6 @@ def purge(
              "retention_days": retention_days,
              "cutoff": cutoff_str,
              "removed_jsonl_files": removed_files,
+             "removed_log_files": removed_log_files,
              "removed_sqlite_rows": removed_rows,
          })

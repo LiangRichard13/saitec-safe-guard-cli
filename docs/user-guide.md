@@ -310,7 +310,7 @@ safe-guard logs --follow         # 持续跟踪（Ctrl+C 退出）
 safe-guard logs --service svc-a  # 按 service 过滤（简单子串匹配）
 ```
 
-日志文件路径：`{config_dir}/logs/safe-guard.log`
+日志文件路径：`{config_dir}/logs/safe-guard.log`。**按日期自动切割**（每日午夜切出 `safe-guard.log.YYYY-MM-DD` 备份，运行期自动保留最近 14 天；手动清理用 `safe-guard purge`）。
 
 ### 4.3 运维类
 
@@ -338,10 +338,17 @@ safe-guard redo <record_id> --json
 #### `purge` — 清理过期数据
 
 ```bash
-safe-guard purge                    # 删 30 天前的 JSONL + SQLite
+safe-guard purge                    # 删 30 天前的 JSONL + 日志备份 + SQLite
 safe-guard purge --retention-days 7 # 自定义保留期
 safe-guard purge --dry-run          # 只看不动
 ```
+
+清理三类：
+- JSONL 记录文件（`records-*.jsonl`，按文件名日期）
+- **日志切割备份**（`safe-guard.log.YYYY-MM-DD`，按文件名日期；活跃的 `safe-guard.log` 不会删）
+- SQLite 中超期的检测记录
+
+> 日志按天自动切割（午夜），服务运行期间自动保留最近 14 天；`purge` 用于手动/更彻底的清理。
 
 ### 4.4 调试类
 

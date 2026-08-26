@@ -585,3 +585,70 @@ def test_tail_no_records(ready_config: Path) -> None:
     assert result.exit_code == 1
     data = json.loads(result.stdout)
     assert "不存在" in data["error"]["message"] or "无 records" in data["error"]["message"]
+
+
+# ============================================================
+# 日志按日期切割 + purge 清理日志
+# ============================================================
+
+
+def test_purge_removes_old_log_backups(ready_config: Path) -> None:
+    """purge 应删除超期的日志切割备份，保留活跃日志文件"""
+    from datetime import date, timedelta
+
+    logs_dir = ready_config / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    old_date = (date.today() - timedelta(days=35)).isoformat()
+    new_date = date.today().isoformat()
+    old_backup = logs_dir / f"safe-guard.log.{old_date}"
+    new_backup = logs_dir / f"safe-guard.log.{new_date}"
+    active = logs_dir / "safe-guard.log"
+    old_backup.write_text("old\n")
+    new_backup.write_text("new\n")
+    active.write_text("active\n")
+
+    result = runner.invoke(app, ["purge", "--retention-days", "30", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert old_backup.name in data["data"]["removed_log_files"]
+    assert not old_backup.exists()
+    assert new_backup.exists()      # 未超期保留
+    assert active.exists()          # 活跃日志永不删
+
+
+def test_purge_dry_run_keeps_logs(ready_config: Path) -> None:
+    from datetime import date, timedelta
+
+    logs_dir = ready_config / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    old_date = (date.today() - timedelta(days=35)).isoformat()
+    old_backup = logs_dir / f"safe-guard.log.{old_date}"
+    old_backup.write_text("old\n")
+
+    result = runner.invoke(app, ["purge", "--retention-days", "30", "--dry-run", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert old_backup.name in data["data"]["removed_log_files"]
+    assert old_backup.exists()  # dry-run 不删
+
+
+def test_serve_logging_uses_daily_rotation(tmp_path: Path) -> None:
+    """_setup_logging 应配置按日切割的 handler"""
+    import logging
+    from logging.handlers import TimedRotatingFileHandler
+    from saitec.cli._serve import _setup_logging, LOG_BACKUP_COUNT
+
+    root = logging.getLogger()
+    saved_handlers = root.handlers[:]
+    try:
+        _setup_logging(tmp_path / "config.json", "INFO")
+        assert len(root.handlers) == 1
+        h = root.handlers[0]
+        assert isinstance(h, TimedRotatingFileHandler)
+        assert h.when == "MIDNIGHT"
+        assert h.backupCount == LOG_BACKUP_COUNT
+    finally:
+        for h in root.handlers:
+            h.close()
+        root.handlers = saved_handlers

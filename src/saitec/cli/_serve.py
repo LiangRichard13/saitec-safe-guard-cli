@@ -9,6 +9,7 @@ import asyncio
 import logging
 import signal
 import sys
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 # _serve.py 被 `safe-guard start` 以独立脚本方式（`python _serve.py <config>`）
@@ -19,11 +20,21 @@ from saitec.runtime.runtime import Runtime
 
 STOP_FLAG_NAME = "safe-guard.stop.flag"
 
+# 日志按天切割（午夜），运行期自动保留最近 N 天；更彻底/及时的清理用 `safe-guard purge`
+LOG_BACKUP_COUNT = 14
+
 
 def _setup_logging(config_path: Path, log_level: str) -> None:
     logs_dir = config_path.parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    handler = logging.FileHandler(logs_dir / "safe-guard.log", encoding="utf-8")
+    # 按日期切割：切割后备份名为 safe-guard.log.YYYY-MM-DD；
+    # Windows 下仅本进程持有写句柄，轮转无锁冲突
+    handler = TimedRotatingFileHandler(
+        logs_dir / "safe-guard.log",
+        when="midnight",
+        backupCount=LOG_BACKUP_COUNT,
+        encoding="utf-8",
+    )
     handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     )
