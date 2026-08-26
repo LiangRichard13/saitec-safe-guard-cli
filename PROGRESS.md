@@ -5,7 +5,7 @@
 
 ## 2026-08-26
 
-### refactor: 品牌统一 SSGC——包名/命令/路径/文档全量重命名 <待提交>
+### refactor: 品牌统一 SSGC——包名/命令/路径/文档全量重命名 <9b0d301>
 命名体系定稿：正式名 `saitec-safe-guard-cli`（repo/PyPI 不变），代码内一律 `ssgc`（src 目录/import/CLI 命令/环境变量 SSGC_CONFIG），品牌 SSGC，数据目录 `~/.ssgc`（弃 platformdirs，删依赖），日志/PID/stop flag 改 `ssgc.*`，banner 换 SSGC，skill 目录改名 `.claude/skills/ssgc`。不保留旧名兼容（无 safe-guard 别名、不回退 SAITEC_CONFIG）。保留：conda 环境名 saitec-guard、GitHub URL、作者 SaITec、本文件历史条目。本机数据迁移（AppData/Local/saitec → ~/.ssgc）与 conda 重装随后执行。
 教训: 全局替换 `safe-guard` 前必须先用占位符保护 `saitec-safe-guard-cli`（PyPI/repo 名是其超集，会误伤）；`patch("saitec.xxx")` 这类字符串模块路径不被 `from saitec`/`import saitec` 两条 sed 规则覆盖，残留检查必须独立跑。
 
