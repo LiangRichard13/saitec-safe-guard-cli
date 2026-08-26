@@ -31,7 +31,7 @@ safe-guard start
 
 **v0.1.0 — 初版交付水平**。14 个命令全部可用；端到端链路（init→start→monitor→发请求→JSONL→上报→SQLite→report→stop）在 mock detector 上验证过；232 个 pytest 全绿。
 
-已修复的鲁棒性问题（端到端联调发现）见 [`docs/issues/cli-usage-issues.md`](docs/issues/cli-usage-issues.md)。
+开发约定见 [AGENTS.md](AGENTS.md)（分层原则/测试/文档矩阵/git 规范），项目进度见 [PROGRESS.md](PROGRESS.md)。已修复的鲁棒性问题（端到端联调发现）见 [`docs/issues/cli-usage-issues.md`](docs/issues/cli-usage-issues.md)。
 
 ## 命令速查
 
