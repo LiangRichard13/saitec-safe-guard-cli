@@ -51,7 +51,7 @@ def main(
         "--config",
         "-c",
         envvar="SSGC_CONFIG",
-        help="配置文件路径（默认由 platformdirs 解析）",
+        help="配置文件路径（默认 ~/.ssgc/config.json）",
     ),
     json_output: bool = typer.Option(
         False,

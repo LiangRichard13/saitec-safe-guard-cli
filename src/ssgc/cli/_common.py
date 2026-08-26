@@ -1,6 +1,6 @@
 """CLI 共享辅助
 
-- 配置路径解析（--config / SSGC_CONFIG / platformdirs）
+- 配置路径解析（--config / SSGC_CONFIG / ~/.ssgc 默认）
 - 输出契约（人类可读 / JSON，见 architecture.md §4 Layer 6）
 - 人类可读输出的统一视觉（rich：颜色 / 图标 / banner）
 - PID 文件管理（跨平台）
@@ -137,7 +137,7 @@ def _render_human(data: Any) -> None:
 
 
 def get_config_path(ctx: typer.Context) -> Path:
-    """从 ctx.obj 取配置路径（或环境变量 SSGC_CONFIG / platformdirs 默认）
+    """从 ctx.obj 取配置路径（或环境变量 SSGC_CONFIG / ~/.ssgc 默认）
 
     注意：sub-typer 命令（config get/set/...）的 ctx.obj 不继承主 callback 的修改，
     所以这里显式回退到环境变量。

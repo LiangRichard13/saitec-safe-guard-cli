@@ -1,6 +1,6 @@
 """core — 最底层（Layer 1）
 
-无 IO、无 aiohttp/typer/sqlite3 依赖，仅标准库 + `platformdirs`。
+无 IO、无 aiohttp/typer/sqlite3 依赖，仅标准库。
 
 可单独 `pip install` 后被任意脚本 / 测试 import，是整套系统的"领域字典"。
 """
