@@ -5,7 +5,7 @@
 
 ## 2026-08-26
 
-### fix: P0 gzip 上游响应头透传导致客户端全量 Connection error <待提交>
+### fix: P0 gzip 上游响应头透传导致客户端全量 Connection error <812ddeb>
 DeepSeek（压缩上游）联调暴露：aiohttp `auto_decompress=True` 已解压 body，但 `Content-Encoding: gzip` 头被原样透传 → openai SDK 按 gzip 解码明文失败，报 Connection error 并重试 2 次（代理侧全 200、JSONL 同请求 ×3 是识别指纹）。修复：两处响应头过滤集合提取为 `_STRIP_RESPONSE_HEADERS` 常量并加 `content-encoding`；+2 回归测试（非流式/SSE）；236 pytest 全绿，真实 DeepSeek 端到端验证通过。
 教训: 代理改写了 body（解压/重组/分块）就必须重算/剥离描述 body 表示的头（Content-Length/Transfer-Encoding/**Content-Encoding**）——之前只想到前两个；本地不压缩的上游测不出这类 bug，必须用真实压缩上游联调。
 
