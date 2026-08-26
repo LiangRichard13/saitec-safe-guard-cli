@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from saitec.cli.main import app
+from ssgc.cli.main import app
 
 runner = CliRunner()
 
@@ -16,9 +16,9 @@ runner = CliRunner()
 def ready_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """初始化一个单服务配置（upstream 指向本地 mock 上游）"""
     cfg_path = tmp_path / "config.json"
-    monkeypatch.setenv("SAITEC_CONFIG", str(cfg_path))
-    monkeypatch.delenv("SAITEC_API_KEY", raising=False)
-    monkeypatch.delenv("SAITEC_DETECTOR_URL", raising=False)
+    monkeypatch.setenv("SSGC_CONFIG", str(cfg_path))
+    monkeypatch.delenv("SSGC_API_KEY", raising=False)
+    monkeypatch.delenv("SSGC_DETECTOR_URL", raising=False)
     r = runner.invoke(app, [
         "init", "--api-key", "sk-test-12345678",
         "--detector-url", "http://d:8080",
@@ -39,7 +39,7 @@ def _services(cfg_dir: Path) -> list[dict]:
 
 def test_init_missing_upstream_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """非 TTY 且未给 --upstream → MISSING_UPSTREAM"""
-    monkeypatch.setenv("SAITEC_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SSGC_CONFIG", str(tmp_path / "config.json"))
     result = runner.invoke(
         app, ["init", "--api-key", "sk-test-12345678", "--detector-url", "http://d:8080"],
         input="\n",
@@ -51,7 +51,7 @@ def test_init_missing_upstream_errors(tmp_path: Path, monkeypatch: pytest.Monkey
 
 def test_init_single_service_with_upstream(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """init --upstream 生成单服务配置"""
-    monkeypatch.setenv("SAITEC_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SSGC_CONFIG", str(tmp_path / "config.json"))
     result = runner.invoke(
         app, [
             "init", "--api-key", "sk-test-12345678",
@@ -70,7 +70,7 @@ def test_init_single_service_with_upstream(tmp_path: Path, monkeypatch: pytest.M
 
 def test_init_guesses_anthropic_type(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """upstream 含 anthropic → 启发式 anthropic-messages"""
-    monkeypatch.setenv("SAITEC_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SSGC_CONFIG", str(tmp_path / "config.json"))
     result = runner.invoke(
         app, [
             "init", "--api-key", "sk-test-12345678",
@@ -86,7 +86,7 @@ def test_init_guesses_anthropic_type(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_init_rejects_invalid_endpoint_type(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SAITEC_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("SSGC_CONFIG", str(tmp_path / "config.json"))
     result = runner.invoke(
         app, [
             "init", "--api-key", "sk-test-12345678",
@@ -272,7 +272,7 @@ def test_no_warning_on_clean_upstream(ready_config: Path) -> None:
 
 
 def test_format_services_block_variants() -> None:
-    from saitec.cli._common import format_services_block
+    from ssgc.cli._common import format_services_block
 
     block = format_services_block([
         {"name": "a", "port": 9001, "upstream": "http://u1",

@@ -15,7 +15,6 @@ keywords = ["llm", "reverse-proxy", "security", "monitoring"]
 dependencies = [
     "aiohttp>=3.9",
     "typer>=0.12",
-    "platformdirs>=4.0",
     # CLI 人类可读输出的视觉系统（typer 已传递依赖，此处显式声明因直接 import）
     "rich>=13.8",
 ]
@@ -34,7 +33,7 @@ mock = [
 ]
 
 [project.scripts]
-safe-guard = "saitec.cli.main:app"
+ssgc = "ssgc.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]

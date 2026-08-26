@@ -57,7 +57,7 @@ def status_cmd(
     }
 
     # 附加日志尾部（错误时有用）
-    log_file = path.parent / "logs" / "safe-guard.log"
+    log_file = path.parent / "logs" / "ssgc.log"
     if log_file.exists():
         data["last_log"] = _tail(log_file, 10)
 

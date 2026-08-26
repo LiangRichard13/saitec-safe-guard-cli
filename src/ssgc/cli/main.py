@@ -36,7 +36,7 @@ _configure_io_encoding()
 
 
 app = typer.Typer(
-    name="safe-guard",
+    name="ssgc",
     help="监控大模型 API 调用的反向代理 CLI",
     no_args_is_help=True,
     add_completion=False,
@@ -50,7 +50,7 @@ def main(
         None,
         "--config",
         "-c",
-        envvar="SAITEC_CONFIG",
+        envvar="SSGC_CONFIG",
         help="配置文件路径（默认由 platformdirs 解析）",
     ),
     json_output: bool = typer.Option(

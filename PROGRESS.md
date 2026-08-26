@@ -5,6 +5,10 @@
 
 ## 2026-08-26
 
+### refactor: 品牌统一 SSGC——包名/命令/路径/文档全量重命名 <待提交>
+命名体系定稿：正式名 `saitec-safe-guard-cli`（repo/PyPI 不变），代码内一律 `ssgc`（src 目录/import/CLI 命令/环境变量 SSGC_CONFIG），品牌 SSGC，数据目录 `~/.ssgc`（弃 platformdirs，删依赖），日志/PID/stop flag 改 `ssgc.*`，banner 换 SSGC，skill 目录改名 `.claude/skills/ssgc`。不保留旧名兼容（无 safe-guard 别名、不回退 SAITEC_CONFIG）。保留：conda 环境名 saitec-guard、GitHub URL、作者 SaITec、本文件历史条目。本机数据迁移（AppData/Local/saitec → ~/.ssgc）与 conda 重装随后执行。
+教训: 全局替换 `safe-guard` 前必须先用占位符保护 `saitec-safe-guard-cli`（PyPI/repo 名是其超集，会误伤）；`patch("saitec.xxx")` 这类字符串模块路径不被 `from saitec`/`import saitec` 两条 sed 规则覆盖，残留检查必须独立跑。
+
 ### docs: 文档矩阵收紧——bug 修复不更新 user-guide/SKILL <208e5cf>
 撤销 gzip 修复在 user-guide §7.9 / SKILL 排错树与陷阱表 / operations.md 的排错条目（issues 清单保留）。AGENTS.md §4 矩阵拆分"CLI 操作行为变化"与"bug 修复"两行并加原则注脚：已修复的 bug 用户不会再遇到，排错条目只收仍存在/需用户操作的问题。
 教训: 排错文档是给"还会遇到这个问题的人"看的——修复提交里顺手写排错条目是把文档矩阵当成了"改动清单"而非"用户视角"。

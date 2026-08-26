@@ -135,4 +135,4 @@ def report(
         console.print(f"{WARN} 风险摘要:")
         for rid, status, reason in flagged:
             console.print(f"  [bold]{rid}[/bold] [{ 'red' if status == 'violation' else 'yellow' }]{status}[/] — {reason}")
-    console.print(f"[dim]完整字段（时间 / detected_at / detail）用 --json 查看；重报: safe-guard redo <record_id>[/dim]")
+    console.print(f"[dim]完整字段（时间 / detected_at / detail）用 --json 查看；重报: ssgc redo <record_id>[/dim]")

@@ -19,7 +19,7 @@
 - MOCK_LLM_BASE_URL           llm 模式的 OpenAI 兼容端点，默认 https://api.deepseek.com/v1
 - MOCK_LLM_API_KEY            llm 模式的 API key（llm 模式必填）
 - MOCK_LLM_MODEL              llm 模式的模型名，默认 deepseek-chat
-- MOCK_LLM_TIMEOUT_SEC        llm 模式单条判定超时，默认 25（safe-guard 侧总超时 30s）
+- MOCK_LLM_TIMEOUT_SEC        llm 模式单条判定超时，默认 25（ssgc 侧总超时 30s）
 
 在 tests/mock_detector/.env 填入（已被 .gitignore 忽略，不会提交）：
 

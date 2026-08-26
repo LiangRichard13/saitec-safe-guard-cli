@@ -84,13 +84,13 @@ def init_cmd(
     api_key: str | None = typer.Option(
         None,
         "--api-key",
-        envvar="SAITEC_API_KEY",
+        envvar="SSGC_API_KEY",
         help="X-API-Key（建议从 stdin 注入，避免 shell history）",
     ),
     detector_url: str | None = typer.Option(
         None,
         "--detector-url",
-        envvar="SAITEC_DETECTOR_URL",
+        envvar="SSGC_DETECTOR_URL",
         help="检测服务器地址",
     ),
     upstream: str | None = typer.Option(
@@ -115,7 +115,7 @@ def init_cmd(
     json_output: bool = typer.Option(False, "--json"),
     force: bool = typer.Option(False, "--force", help="覆盖已存在的 config.json"),
 ) -> None:
-    """生成 config.json（单服务；监控更多端点用 `safe-guard service add`）"""
+    """生成 config.json（单服务；监控更多端点用 `ssgc service add`）"""
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     if path.exists() and not force:
@@ -149,7 +149,7 @@ def init_cmd(
             ok=False,
             error={
                 "code": "MISSING_API_KEY",
-                "message": "缺少 api_key：用 --api-key 指定或通过环境变量 SAITEC_API_KEY 提供",
+                "message": "缺少 api_key：用 --api-key 指定或通过环境变量 SSGC_API_KEY 提供",
             },
             exit_code=EXIT_USER_ERROR,
         )
@@ -262,8 +262,8 @@ def init_cmd(
                 "warnings": warnings,
                 "created_at": now_iso8601(),
                 "next_steps": [
-                    "监控更多端点: safe-guard service add <name> --upstream <URL>",
-                    "启动服务: safe-guard start",
+                    "监控更多端点: ssgc service add <name> --upstream <URL>",
+                    "启动服务: ssgc start",
                 ],
             },
         )
@@ -277,7 +277,7 @@ def init_cmd(
         console.print(format_services_block([service]))
         console.print()
         console.print("[dim]下一步:[/dim]")
-        console.print(f"  - 监控更多端点: [cyan]safe-guard service add <name> --upstream <URL>[/cyan]")
-        console.print(f"  - 启动服务:     [cyan]safe-guard start[/cyan]")
+        console.print(f"  - 监控更多端点: [cyan]ssgc service add <name> --upstream <URL>[/cyan]")
+        console.print(f"  - 启动服务:     [cyan]ssgc start[/cyan]")
         if os.name == "nt":
             err_console.print(f"{WARN} 建议在 Windows 上用 icacls 限制 config.json 权限")

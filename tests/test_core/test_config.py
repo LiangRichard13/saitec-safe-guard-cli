@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from saitec.core.config import (
+from ssgc.core.config import (
     apply_cli_overrides,
     apply_env_overrides,
     load_config_json,
     load_config_with_overrides,
     validate_config,
 )
-from saitec.core.models import (
+from ssgc.core.models import (
     AppConfig,
     ConfigErrorCode,
     ConfigSource,
@@ -25,15 +25,15 @@ from saitec.core.models import (
 
 
 # ============================================================
-# Fixture：清空 SAITEC_* 环境变量，避免测试互相污染
+# Fixture：清空 SSGC_* 环境变量，避免测试互相污染
 # ============================================================
 
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """每个测试前清空 SAITEC_* 环境变量"""
+    """每个测试前清空 SSGC_* 环境变量"""
     for k in list(os.environ):
-        if k.startswith("SAITEC_"):
+        if k.startswith("SSGC_"):
             monkeypatch.delenv(k)
 
 
@@ -161,7 +161,7 @@ def test_load_config_json_missing_services_key(tmp_path: Path) -> None:
 def test_apply_env_overrides_detector_url(
     valid_config: AppConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SAITEC_DETECTOR_URL", "http://override:9090")
+    monkeypatch.setenv("SSGC_DETECTOR_URL", "http://override:9090")
     new = apply_env_overrides(valid_config)
     assert new.detector.url == "http://override:9090"
 
@@ -169,7 +169,7 @@ def test_apply_env_overrides_detector_url(
 def test_apply_env_overrides_report_interval_int(
     valid_config: AppConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SAITEC_REPORT_INTERVAL", "120")
+    monkeypatch.setenv("SSGC_REPORT_INTERVAL", "120")
     new = apply_env_overrides(valid_config)
     assert new.detector.report_interval_sec == 120
     assert isinstance(new.detector.report_interval_sec, int)
@@ -178,7 +178,7 @@ def test_apply_env_overrides_report_interval_int(
 def test_apply_env_overrides_log_level(
     valid_config: AppConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SAITEC_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("SSGC_LOG_LEVEL", "DEBUG")
     new = apply_env_overrides(valid_config)
     assert new.log_level == "DEBUG"
 
@@ -186,7 +186,7 @@ def test_apply_env_overrides_log_level(
 def test_apply_env_overrides_service_port(
     valid_config: AppConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SAITEC_OPENAI-CHAT-COMPLETIONS_PORT", "9999")
+    monkeypatch.setenv("SSGC_OPENAI-CHAT-COMPLETIONS_PORT", "9999")
     new = apply_env_overrides(valid_config)
     assert new.services[0].port == 9999
     assert new.services[1].port == 9002  # 未被覆盖
@@ -195,7 +195,7 @@ def test_apply_env_overrides_service_port(
 def test_apply_env_overrides_service_record_body(
     valid_config: AppConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SAITEC_OPENAI-CHAT-COMPLETIONS_RECORD_BODY", "false")
+    monkeypatch.setenv("SSGC_OPENAI-CHAT-COMPLETIONS_RECORD_BODY", "false")
     new = apply_env_overrides(valid_config)
     assert new.services[0].record_body is False
 
@@ -203,8 +203,8 @@ def test_apply_env_overrides_service_record_body(
 def test_apply_env_overrides_unknown_service_ignored(
     valid_config: AppConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """SAITEC_UNKNOWN_PORT 没有匹配的 service 名，应被忽略"""
-    monkeypatch.setenv("SAITEC_UNKNOWN_PORT", "9999")
+    """SSGC_UNKNOWN_PORT 没有匹配的 service 名，应被忽略"""
+    monkeypatch.setenv("SSGC_UNKNOWN_PORT", "9999")
     new = apply_env_overrides(valid_config)
     assert new.services[0].port == 9001
 
@@ -212,7 +212,7 @@ def test_apply_env_overrides_unknown_service_ignored(
 def test_apply_env_overrides_no_changes(
     valid_config: AppConfig,
 ) -> None:
-    """无 SAITEC_* 环境变量时，配置应原样"""
+    """无 SSGC_* 环境变量时，配置应原样"""
     new = apply_env_overrides(valid_config)
     assert new == valid_config
 
@@ -335,7 +335,7 @@ def test_validate_config_endpoint_path() -> None:
 def test_load_config_endpoint_path_default_and_custom(tmp_path) -> None:
     """JSON 缺省时用 /detect；显式配置时读显式值"""
     import json as _json
-    from saitec.core.config import load_config_json
+    from ssgc.core.config import load_config_json
 
     # 缺省
     p1 = tmp_path / "c1.json"
@@ -357,16 +357,16 @@ def test_load_config_endpoint_path_default_and_custom(tmp_path) -> None:
 
 
 def test_env_override_endpoint_path(tmp_path, monkeypatch) -> None:
-    """SAITEC_ENDPOINT_PATH 覆盖生效"""
+    """SSGC_ENDPOINT_PATH 覆盖生效"""
     import json as _json
-    from saitec.core.config import load_config_json, apply_env_overrides
+    from ssgc.core.config import load_config_json, apply_env_overrides
 
     p = tmp_path / "c.json"
     p.write_text(_json.dumps({
         "detector": {"url": "http://d", "api_key": "k"},
         "services": [],
     }), encoding="utf-8")
-    monkeypatch.setenv("SAITEC_ENDPOINT_PATH", "/env-detect")
+    monkeypatch.setenv("SSGC_ENDPOINT_PATH", "/env-detect")
     cfg = apply_env_overrides(load_config_json(p))
     assert cfg.detector.endpoint_path == "/env-detect"
 
@@ -436,7 +436,7 @@ def test_load_config_with_overrides_basic(
 def test_load_config_with_overrides_cli_wins(
     valid_config_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SAITEC_DETECTOR_URL", "http://env:1234")
+    monkeypatch.setenv("SSGC_DETECTOR_URL", "http://env:1234")
     cfg, sources = load_config_with_overrides(
         valid_config_path, detector_url="http://cli:5678"
     )
@@ -449,7 +449,7 @@ def test_load_config_with_overrides_cli_wins(
 def test_load_config_with_overrides_env_source(
     valid_config_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SAITEC_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("SSGC_LOG_LEVEL", "DEBUG")
     cfg, sources = load_config_with_overrides(valid_config_path)
     assert cfg.log_level == "DEBUG"
     assert sources.sources.get("log_level") == ConfigSource.ENV
@@ -480,7 +480,7 @@ def test_load_config_with_overrides_priority(
     valid_config_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """config < env < cli 的优先级"""
-    monkeypatch.setenv("SAITEC_REPORT_INTERVAL", "120")
+    monkeypatch.setenv("SSGC_REPORT_INTERVAL", "120")
     cfg, _ = load_config_with_overrides(
         valid_config_path, report_interval=300
     )

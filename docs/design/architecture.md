@@ -406,14 +406,14 @@ CLI 不是只给人看的，**必须支持 Agent 解析**。所有命令遵循�
 
 ```bash
 # 人类可读
-safe-guard status
+ssgc status
 #   SERVICE                  PORT  UPSTREAM               STATUS   QUEUE_DEPTH
 #   openai-chat-completions  9001  https://api.openai.com running 12
 #   openai-responses         9002  https://api.openai.com running 0
 #   anthropic-messages       9003  https://api.anthropic  running 5
 
 # 机器可读
-safe-guard status --json
+ssgc status --json
 # {
 #   "services": [
 #     {"name": "openai-chat-completions", "port": 9001, "upstream": "https://api.openai.com", "status": "running", "queue_depth": 12},
@@ -458,7 +458,7 @@ Agent 用 `$?` 即可判定下一步动作。
 `init` 默认交互式（人类方便），但支持全非交互参数：
 
 ```bash
-safe-guard init --api-key "$API_KEY" --detector-url "http://detector:8080" --config ./config.json
+ssgc init --api-key "$API_KEY" --detector-url "http://detector:8080" --config ./config.json
 ```
 
 **异步命令（`start`）**
@@ -593,7 +593,7 @@ async def _replay_unreported(self):
 ## 8. 包结构（目录）
 
 ```
-saitec-safe-guard/
+saitec-safe-guard-cli/
 ├── pyproject.toml
 ├── README.md
 ├── docs/
@@ -601,7 +601,7 @@ saitec-safe-guard/
 │       ├── saitec-safe-guard-cli-design.md
 │       └── architecture.md            ← 本文档
 ├── src/
-│   └── saitec/
+│   └── ssgc/
 │       ├── __init__.py
 │       ├── core/                       # layer 0
 │       │   ├── __init__.py

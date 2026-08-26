@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from saitec.adapters.anthropic_messages import AnthropicMessagesAdapter
+from ssgc.adapters.anthropic_messages import AnthropicMessagesAdapter
 
 
 def test_parse_request_ok() -> None:

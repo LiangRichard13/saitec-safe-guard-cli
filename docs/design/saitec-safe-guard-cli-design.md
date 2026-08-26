@@ -2,7 +2,7 @@
 
 - **日期**：2026-08-14
 - **状态**：待评审（Draft）
-- **项目目录**：`C:\Users\Administrator\Desktop\projects\saitec-safe-guard`
+- **项目目录**：`C:\Users\Administrator\Desktop\projects\saitec-safe-guard-cli`
 
 ## 1. 背景与目标
 
@@ -221,9 +221,7 @@
 ## 12. 配置设计（JSON）
 
 > **默认路径**：`config.json` 默认位于平台用户目录（由 `platformdirs` 解析）：
-> - Linux：`~/.local/share/saitec/config.json`
-> - macOS：`~/Library/Application Support/saitec/config.json`
-> - Windows：`%LOCALAPPDATA%\saitec\config.json`
+> - 全平台统一：`~/.ssgc/config.json`
 >
 > 覆盖机制见 §16.3 与 §12.1。
 
@@ -269,10 +267,10 @@
 
 ```bash
 # 推荐：从 stdin 读取
-read -r -s API_KEY && safe-guard init --api-key "$API_KEY" --detector-url ...
+read -r -s API_KEY && ssgc init --api-key "$API_KEY" --detector-url ...
 
 # 或从环境变量
-safe-guard init --api-key "$SAITEC_API_KEY" --detector-url ...
+ssgc init --api-key "$SSGC_API_KEY" --detector-url ...
 ```
 
 - `init` 完成后**不应**继续让 `api_key` 留在 shell history，用 `unset API_KEY` 清理。
@@ -293,23 +291,23 @@ safe-guard init --api-key "$SAITEC_API_KEY" --detector-url ...
 
 | 字段 | config.json | 环境变量 | 命令行 |
 |---|---|---|---|
-| `detector.url` | ✓ | `SAITEC_DETECTOR_URL` | `--detector-url` (init / start) |
-| `detector.api_key` | ✓ | `SAITEC_API_KEY` | `--api-key` (init only) |
-| `detector.report_interval_sec` | ✓ | `SAITEC_REPORT_INTERVAL` | `--report-interval` |
-| `detector.batch_size` | ✓ | `SAITEC_BATCH_SIZE` | `--batch-size` |
-| `detector.max_queue_size` | ✓ | `SAITEC_MAX_QUEUE_SIZE` | `--max-queue-size` |
-| `services[N].port` | ✓ | `SAITEC_<NAME>_PORT` | `--port` |
-| `services[N].upstream` | ✓ | `SAITEC_<NAME>_UPSTREAM` | `--upstream` |
+| `detector.url` | ✓ | `SSGC_DETECTOR_URL` | `--detector-url` (init / start) |
+| `detector.api_key` | ✓ | `SSGC_API_KEY` | `--api-key` (init only) |
+| `detector.report_interval_sec` | ✓ | `SSGC_REPORT_INTERVAL` | `--report-interval` |
+| `detector.batch_size` | ✓ | `SSGC_BATCH_SIZE` | `--batch-size` |
+| `detector.max_queue_size` | ✓ | `SSGC_MAX_QUEUE_SIZE` | `--max-queue-size` |
+| `services[N].port` | ✓ | `SSGC_<NAME>_PORT` | `--port` |
+| `services[N].upstream` | ✓ | `SSGC_<NAME>_UPSTREAM` | `--upstream` |
 | `services[N].endpoint_type` | ✓ | (固定，启动时校验) | (固定) |
-| `services[N].record_body` | ✓ | `SAITEC_<NAME>_RECORD_BODY` | `--record-body` |
-| `log_level` | ✓ | `SAITEC_LOG_LEVEL` | `--log-level` |
-| `config.json` 路径 | (默认 `./config.json`) | `SAITEC_CONFIG` | `--config` |
+| `services[N].record_body` | ✓ | `SSGC_<NAME>_RECORD_BODY` | `--record-body` |
+| `log_level` | ✓ | `SSGC_LOG_LEVEL` | `--log-level` |
+| `config.json` 路径 | (默认 `./config.json`) | `SSGC_CONFIG` | `--config` |
 
 **环境变量命名约定**：
 
-- 全大写，`SAITEC_` 前缀
+- 全大写，`SSGC_` 前缀
 - 用 `_` 分隔字段
-- service 维度的覆盖用 `SAITEC_<NAME>_XXX` 形式，其中 `<NAME>` 与 `services[N].name` 一致，否则报错
+- service 维度的覆盖用 `SSGC_<NAME>_XXX` 形式，其中 `<NAME>` 与 `services[N].name` 一致，否则报错
 
 **覆盖语义**：
 
@@ -339,34 +337,34 @@ if errors: exit(1)
 **配置类**（3 个）：
 
 ```
-safe-guard init         交互式 / 非交互式生成 config.json
-safe-guard validate     校验 config.json（不启动服务）
-safe-guard config       配置管理（get / set / unset / list 子命令）
+ssgc init         交互式 / 非交互式生成 config.json
+ssgc validate     校验 config.json（不启动服务）
+ssgc config       配置管理（get / set / unset / list 子命令）
 ```
 
 **生命周期类**（5 个）：
 
 ```
-safe-guard start        启动服务（异步，PID 文件）
-safe-guard stop         优雅停止服务（SIGTERM → SIGKILL 兜底）
-safe-guard restart      优雅重启（stop + start）
-safe-guard status       查询运行状态（各端口 / 队列 / 上报状态）
-safe-guard logs         查看日志（--tail N / --follow / --service NAME）
+ssgc start        启动服务（异步，PID 文件）
+ssgc stop         优雅停止服务（SIGTERM → SIGKILL 兜底）
+ssgc restart      优雅重启（stop + start）
+ssgc status       查询运行状态（各端口 / 队列 / 上报状态）
+ssgc logs         查看日志（--tail N / --follow / --service NAME）
 ```
 
 **运维类**（3 个）：
 
 ```
-safe-guard report       查询 SQLite 检测结果
-safe-guard redo         手动重报某条记录（绕过游标）
-safe-guard purge        清理过期 JSONL + SQLite（--retention-days N）
+ssgc report       查询 SQLite 检测结果
+ssgc redo         手动重报某条记录（绕过游标）
+ssgc purge        清理过期 JSONL + SQLite（--retention-days N）
 ```
 
 **调试类**（2 个）：
 
 ```
-safe-guard doctor       自检（端口 / API key / 磁盘 / SQLite / JSONL）
-safe-guard tail         实时跟踪事件流（类似 tail -f JSONL）
+ssgc doctor       自检（端口 / API key / 磁盘 / SQLite / JSONL）
+ssgc tail         实时跟踪事件流（类似 tail -f JSONL）
 ```
 
 ### 13.1 输出契约（Agent 友好）
@@ -376,8 +374,8 @@ CLI 不仅是给人看的，**必须可被 Agent 解析**。每条命令遵循�
 **1. 双形态输出**：默认人类可读（表格），加 `--json` 切换为 JSON。
 
 ```bash
-safe-guard status                 # 人类可读表格
-safe-guard status --json          # 机器可读 JSON
+ssgc status                 # 人类可读表格
+ssgc status --json          # 机器可读 JSON
 ```
 
 **2. 退出码语义化**：
@@ -395,7 +393,7 @@ safe-guard status --json          # 机器可读 JSON
 **非交互模式**：`init` 默认交互，但支持全非交互参数（Agent 友好）：
 
 ```bash
-safe-guard init --api-key "$API_KEY" --detector-url "http://detector:8080" --config ./config.json
+ssgc init --api-key "$API_KEY" --detector-url "http://detector:8080" --config ./config.json
 ```
 
 **异步启动**：`start` 立即返回（成功 `exit 0` + PID 文件），Agent 用 `status` 查询运行状态。
@@ -417,17 +415,17 @@ safe-guard init --api-key "$API_KEY" --detector-url "http://detector:8080" --con
 **`config get <key>`** —— 查看单个字段
 
 ```bash
-safe-guard config get detector.url
+ssgc config get detector.url
 # http://detector:8080
 
-safe-guard config get services.openai-chat-completions.port --json
+ssgc config get services.openai-chat-completions.port --json
 # {"value": 9001, "source": "config"}
 ```
 
 **`config set <key> <value>`** —— 修改单个字段（持久化）
 
 ```bash
-safe-guard config set detector.report_interval_sec 30
+ssgc config set detector.report_interval_sec 30
 # 写入 config.json（自动快照 + 校验）
 ```
 
@@ -435,13 +433,13 @@ safe-guard config set detector.report_interval_sec 30
 
 - **修改前快照**：保存 `config.json.bak.<timestamp>`
 - **修改后立即 `validate`**：校验失败则**回滚**
-- **不自动重启**：必须 `safe-guard restart` 才生效
+- **不自动重启**：必须 `ssgc restart` 才生效
 - **`status` 显示**：当前配置 vs 重启后配置（diff）
 
 **`config unset <key>`** —— 清除字段（回退到默认）
 
 ```bash
-safe-guard config unset services.openai-chat-completions.record_body
+ssgc config unset services.openai-chat-completions.record_body
 # 该字段将使用默认值 true
 ```
 
@@ -453,7 +451,7 @@ safe-guard config unset services.openai-chat-completions.record_body
 KEY                                       VALUE                      SOURCE
 detector.url                              http://detector:8080       config
 detector.api_key                          sk-***                     config
-detector.report_interval_sec              30                         env (SAITEC_REPORT_INTERVAL)
+detector.report_interval_sec              30                         env (SSGC_REPORT_INTERVAL)
 services.openai-chat-completions.port     9001                       config
 ```
 
@@ -464,7 +462,7 @@ JSON 形态（Agent 友好）：
   "config": {
     "detector.url": {"value": "http://detector:8080", "source": "config"},
     "detector.api_key": {"value": "sk-***", "source": "config"},
-    "detector.report_interval_sec": {"value": 30, "source": "env", "env_var": "SAITEC_REPORT_INTERVAL"},
+    "detector.report_interval_sec": {"value": 30, "source": "env", "env_var": "SSGC_REPORT_INTERVAL"},
     "services.openai-chat-completions.port": {"value": 9001, "source": "config"}
   },
   "effective_at": "2026-08-14T..."
@@ -481,16 +479,16 @@ JSON 形态（Agent 友好）：
 
 | 字段 | 环境变量 |
 |---|---|
-| `detector.url` | `SAITEC_DETECTOR_URL` |
-| `detector.api_key` | `SAITEC_API_KEY` |
-| `detector.report_interval_sec` | `SAITEC_REPORT_INTERVAL` |
-| `detector.batch_size` | `SAITEC_BATCH_SIZE` |
-| `detector.max_queue_size` | `SAITEC_MAX_QUEUE_SIZE` |
-| `services.<NAME>.port` | `SAITEC_<NAME>_PORT` |
-| `services.<NAME>.upstream` | `SAITEC_<NAME>_UPSTREAM` |
-| `services.<NAME>.record_body` | `SAITEC_<NAME>_RECORD_BODY` |
-| `log_level` | `SAITEC_LOG_LEVEL` |
-| `config.json` 路径 | `SAITEC_CONFIG` |
+| `detector.url` | `SSGC_DETECTOR_URL` |
+| `detector.api_key` | `SSGC_API_KEY` |
+| `detector.report_interval_sec` | `SSGC_REPORT_INTERVAL` |
+| `detector.batch_size` | `SSGC_BATCH_SIZE` |
+| `detector.max_queue_size` | `SSGC_MAX_QUEUE_SIZE` |
+| `services.<NAME>.port` | `SSGC_<NAME>_PORT` |
+| `services.<NAME>.upstream` | `SSGC_<NAME>_UPSTREAM` |
+| `services.<NAME>.record_body` | `SSGC_<NAME>_RECORD_BODY` |
+| `log_level` | `SSGC_LOG_LEVEL` |
+| `config.json` 路径 | `SSGC_CONFIG` |
 
 ### 15.4 边界与限制
 
@@ -501,14 +499,14 @@ JSON 形态（Agent 友好）：
 
 ## 16. 部署路径与目录解析
 
-本节定义 `safe-guard` 安装后的默认路径规则，遵循业界成熟 CLI 的做法（git config / docker context / kubectl 等）。
+本节定义 `ssgc` 安装后的默认路径规则，遵循业界成熟 CLI 的做法（git config / docker context / kubectl 等）。
 
 ### 16.1 三种路径策略对比
 
 | 策略 | 默认路径 | 覆盖机制 | 适用 |
 |---|---|---|---|
 | **跟随项目目录**（最简） | `./config.json` | --config | 开发期 |
-| **平台用户目录**（最常用） | platformdirs 默认 | --config / $SAITEC_CONFIG | pip install 后 |
+| **平台用户目录**（最常用） | platformdirs 默认 | --config / $SSGC_CONFIG | pip install 后 |
 | **XDG 拆分**（Linux 偏好） | config + data 分离 | env vars | 严格备份策略 |
 
 **设计决策**：**采用方案 2（平台用户目录）作为默认 + 方案 3 的覆盖机制**。
@@ -519,9 +517,7 @@ JSON 形态（Agent 友好）：
 
 | 平台 | 默认目录 |
 |---|---|
-| **Linux** | `~/.local/share/saitec/` |
-| **macOS** | `~/Library/Application Support/saitec/` |
-| **Windows** | `%LOCALAPPDATA%\saitec\` |
+| **全平台** | `~/.ssgc/` |
 
 目录结构：
 
@@ -534,8 +530,8 @@ JSON 形态（Agent 友好）：
 │   ├── records-2026-08-14.jsonl
 │   └── ...
 ├── results.db           # SQLite 检测结果库
-└── logs/                # safe-guard logs 命令读取
-    └── safe-guard.log
+└── logs/                # ssgc logs 命令读取
+    └── ssgc.log
 ```
 
 **关键原则**：
@@ -549,31 +545,29 @@ JSON 形态（Agent 友好）：
 **优先级**：
 
 ```
-显式 --config PATH  >  $SAITEC_CONFIG  >  平台默认目录
+显式 --config PATH  >  $SSGC_CONFIG  >  平台默认目录
 ```
 
 ```bash
 # 1. 默认（平台用户目录）
-safe-guard init
-# → Windows: C:\Users\<user>\AppData\Local\saitec\config.json
-# → Linux:   /home/<user>/.local/share/saitec/config.json
-# → macOS:   /Users/<user>/Library/Application Support/saitec/config.json
+ssgc init
+# → 全平台: ~/.ssgc/config.json
 
 # 2. 环境变量覆盖
-SAITEC_CONFIG=/etc/saitec/prod.json safe-guard start
+SSGC_CONFIG=/etc/ssgc/prod.json ssgc start
 
 # 3. 命令行覆盖
-safe-guard --config /etc/saitec/prod.json start
+ssgc --config /etc/ssgc/prod.json start
 ```
 
-**首次 init 自动创建**：当平台默认目录不存在时，`safe-guard init` 自动创建 `config_dir/` + 子目录 `records/` / `logs/`。
+**首次 init 自动创建**：当平台默认目录不存在时，`ssgc init` 自动创建 `config_dir/` + 子目录 `records/` / `logs/`。
 
 ### 16.4 与现有三级覆盖的衔接
 
 路径解析**与 §12.1 的三级字段覆盖独立**：
 
-- `--config PATH` / `$SAITEC_CONFIG` → 决定**配置文件位置**（路径层）
-- `--api-key` / `$SAITEC_API_KEY` / config.json → 决定**字段值**（字段层）
+- `--config PATH` / `$SSGC_CONFIG` → 决定**配置文件位置**（路径层）
+- `--api-key` / `$SSGC_API_KEY` / config.json → 决定**字段值**（字段层）
 
 `config list` 显示**每个字段**的来源（config / env / cli），与路径解析无关。
 
@@ -584,10 +578,10 @@ safe-guard --config /etc/saitec/prod.json start
 ```python
 from platformdirs import user_data_dir
 
-APP_NAME = "saitec"
+APP_NAME = "ssgc"
 
 def resolve_config_dir() -> Path:
-    """解析配置目录：$SAITEC_CONFIG 父目录 / --config 父目录 / platformdirs 默认"""
+    """解析配置目录：$SSGC_CONFIG 父目录 / --config 父目录 / platformdirs 默认"""
     return Path(user_data_dir(APP_NAME, appauthor=False))
 
 def resolve_config_path() -> Path:
@@ -614,10 +608,10 @@ def ensure_dirs() -> None:
 
 ```bash
 # 项目 A
-safe-guard --config ~/.saitec-prod.json start
+ssgc --config ~/.ssgc-prod.json start
 
 # 项目 B
-safe-guard --config ~/.saitec-staging.json start
+ssgc --config ~/.ssgc-staging.json start
 ```
 
 **注意**：每个 config 拥有独立的 `records/` / `results.db` / `logs/`（数据跟随 config 目录）。

@@ -19,7 +19,7 @@ def logs(
 ) -> None:
     """查看日志（支持 --tail / --follow / --service）"""
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
-    log_file = path.parent / "logs" / "safe-guard.log"
+    log_file = path.parent / "logs" / "ssgc.log"
 
     if not log_file.exists():
         emit(json_output=json_output, ok=False,
@@ -38,7 +38,7 @@ def logs(
         emit(json_output=json_output, data=filtered[-tail:])
         return
 
-    # follow 模式（仅人类可读；Agent 场景用 `safe-guard tail` 替代）
+    # follow 模式（仅人类可读；Agent 场景用 `ssgc tail` 替代）
     try:
         with open(log_file, "r", encoding="utf-8", errors="replace") as f:
             # 跳到末尾前 tail 行

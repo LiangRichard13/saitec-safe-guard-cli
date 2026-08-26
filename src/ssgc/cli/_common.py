@@ -1,6 +1,6 @@
 """CLI 共享辅助
 
-- 配置路径解析（--config / SAITEC_CONFIG / platformdirs）
+- 配置路径解析（--config / SSGC_CONFIG / platformdirs）
 - 输出契约（人类可读 / JSON，见 architecture.md §4 Layer 6）
 - 人类可读输出的统一视觉（rich：颜色 / 图标 / banner）
 - PID 文件管理（跨平台）
@@ -52,11 +52,11 @@ CHART = "📊"       # 报表 / 报告
 
 # 品牌 banner（figlet 风格，仅 start/restart 成功后展示）
 _BANNER_ART = r"""
-  ____       _   __  __            _
- / ___|  ___| |_|  \/  | __ _  ___| | _____
- \___ \ / _ \ __| |\/| |/ _` |/ __| |/ / __|
-  ___) |  __/ |_| |  | | (_| | (__|   <\__ \
- |____/ \___|\__|_|  |_|\__,_|\___|_|\_\___/
+ ____    ____    ____    ____
+/ ___|  / ___|  / ___|  / ___|
+\___ \  | |  _  | |      \___ \
+ ___) | | |_| | | |___   ___) |
+|____/   \____|  \____| |____/
 """.strip("\n")
 
 
@@ -137,7 +137,7 @@ def _render_human(data: Any) -> None:
 
 
 def get_config_path(ctx: typer.Context) -> Path:
-    """从 ctx.obj 取配置路径（或环境变量 SAITEC_CONFIG / platformdirs 默认）
+    """从 ctx.obj 取配置路径（或环境变量 SSGC_CONFIG / platformdirs 默认）
 
     注意：sub-typer 命令（config get/set/...）的 ctx.obj 不继承主 callback 的修改，
     所以这里显式回退到环境变量。
@@ -148,7 +148,7 @@ def get_config_path(ctx: typer.Context) -> Path:
             return Path(explicit).expanduser().resolve()
     except (AttributeError, TypeError):
         pass
-    env_var = os.environ.get("SAITEC_CONFIG")
+    env_var = os.environ.get("SSGC_CONFIG")
     if env_var:
         return Path(env_var).expanduser().resolve()
     return resolve_config_path()
@@ -174,7 +174,7 @@ def format_errors(errors: list[ConfigError]) -> list[dict[str, str]]:
 
 
 def pid_file_path(config_path: Path) -> Path:
-    return config_path.parent / "safe-guard.pid"
+    return config_path.parent / "ssgc.pid"
 
 
 def write_pid(config_path: Path, pid: int) -> None:
@@ -229,7 +229,7 @@ def is_pid_alive(pid: int) -> bool:
 
 
 def log_file_path(config_path: Path) -> Path:
-    return config_path.parent / "logs" / "safe-guard.log"
+    return config_path.parent / "logs" / "ssgc.log"
 
 
 def records_dir_for(config_path: Path) -> Path:
@@ -271,7 +271,7 @@ def format_services_block(services: list[dict]) -> str:
     关键串（客户端配置 URL）保持一整行完整。
     """
     if not services:
-        return f"{INFO} 无监控服务，用 [cyan]safe-guard service add <name> --upstream <URL>[/cyan] 添加"
+        return f"{INFO} 无监控服务，用 [cyan]ssgc service add <name> --upstream <URL>[/cyan] 添加"
     lines = [f"{RADAR} [cyan bold]服务映射[/cyan bold] [dim]（客户端 base_url → 本地端口 → 真实上游）[/dim]"]
     for i, s in enumerate(services, 1):
         port = s.get("port", 0)

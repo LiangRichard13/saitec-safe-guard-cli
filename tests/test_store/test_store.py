@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from saitec.core.models import DetectionResult
-from saitec.store.store import Store
+from ssgc.core.models import DetectionResult
+from ssgc.store.store import Store
 
 
 @pytest.fixture
@@ -206,7 +206,7 @@ async def test_cursor_initial_state(db_path: Path) -> None:
 
 
 async def test_cursor_advance(db_path: Path) -> None:
-    from saitec.core.models import ReportCursor
+    from ssgc.core.models import ReportCursor
 
     store = Store(db_path)
     new = ReportCursor(
@@ -225,7 +225,7 @@ async def test_cursor_advance_then_save_idempotent(
     db_path: Path, sample_result: DetectionResult
 ) -> None:
     """游标推进后再次保存应保持幂等"""
-    from saitec.core.models import ReportCursor
+    from ssgc.core.models import ReportCursor
 
     store = Store(db_path)
     await store.advance_cursor(

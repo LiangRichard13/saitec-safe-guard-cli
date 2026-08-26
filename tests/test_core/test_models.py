@@ -1,7 +1,7 @@
 """core 数据模型 + 工具测试"""
 from __future__ import annotations
 
-from saitec.core.models import (
+from ssgc.core.models import (
     AppConfig,
     ConfigError,
     ConfigErrorCode,
@@ -12,14 +12,14 @@ from saitec.core.models import (
     Record,
     ReportCursor,
 )
-from saitec.core.paths import (
+from ssgc.core.paths import (
     APP_NAME,
     ensure_dirs,
     resolve_config_dir,
     resolve_config_path,
     resolve_data_dir,
 )
-from saitec.core.utils import now_iso8601, redact_headers
+from ssgc.core.utils import now_iso8601, redact_headers
 
 
 def test_record_minimal() -> None:
@@ -103,8 +103,8 @@ def test_config_sources_empty() -> None:
 
 
 def test_paths_app_name() -> None:
-    """APP_NAME 是 'saitec'"""
-    assert APP_NAME == "saitec"
+    """APP_NAME 是 'ssgc'"""
+    assert APP_NAME == "ssgc"
 
 
 def test_paths_resolve_no_crash() -> None:

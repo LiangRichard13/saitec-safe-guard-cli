@@ -22,7 +22,7 @@
 
 ## 1. 它解决什么问题
 
-当你用 Claude Code / Codex / 自写脚本调用大模型 API 时，所有请求和响应都会经过公网到大模型厂商。安全团队需要把这些流量**记录下来**并按周期上报到内部检测服务器做合规审计——这就是 `safe-guard` 的工作。
+当你用 Claude Code / Codex / 自写脚本调用大模型 API 时，所有请求和响应都会经过公网到大模型厂商。安全团队需要把这些流量**记录下来**并按周期上报到内部检测服务器做合规审计——这就是 `ssgc` 的工作。
 
 **它做什么**的
 - 在本地监听 3 个端口（默认 9001/9002/9003），分别代理到 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages
@@ -49,7 +49,7 @@
 
 ```bash
 pip install saitec-safe-guard-cli
-safe-guard --help
+ssgc --help
 ```
 
 ### 2.3 源码安装（开发/调试）
@@ -72,7 +72,7 @@ pip install -e ".[mock,dev]"
 验证安装：
 
 ```bash
-safe-guard --help
+ssgc --help
 # 应输出 Usage 和 14 个命令列表
 ```
 
@@ -85,7 +85,7 @@ safe-guard --help
 ### 步骤 1：初始化配置（指明要监控哪个端点）
 
 ```bash
-safe-guard init --api-key "<你的X-API-Key>" \
+ssgc init --api-key "<你的X-API-Key>" \
     --detector-url "http://detector.example.com:8080" \
     --upstream "https://api.openai.com"
 ```
@@ -105,7 +105,7 @@ safe-guard init --api-key "<你的X-API-Key>" \
 输出示例：
 
 ```
-config_path: C:\Users\you\AppData\Local\saitec\config.json
+config_path: C:\Users\you\.ssgc\config.json
 detector_url: http://detector.example.com:8080
 endpoint_type: openai-chat-completions（按 upstream URL 猜测，可用 --endpoint-type 显式指定）
 
@@ -114,21 +114,21 @@ endpoint_type: openai-chat-completions（按 upstream URL 猜测，可用 --endp
      客户端配置: OPENAI_BASE_URL=http://127.0.0.1:9001/v1
 
 下一步:
-  - 监控更多端点: safe-guard service add <name> --upstream <URL>
-  - 启动服务:     safe-guard start
+  - 监控更多端点: ssgc service add <name> --upstream <URL>
+  - 启动服务:     ssgc start
 ```
 
 **要同时监控多个端点？** 用 `service add` 逐个加：
 
 ```bash
-safe-guard service add deepseek-claude --upstream https://api.deepseek.com/anthropic
-safe-guard service add local-llm --upstream http://localhost:23333 --port 9010
+ssgc service add deepseek-claude --upstream https://api.deepseek.com/anthropic
+ssgc service add local-llm --upstream http://localhost:23333 --port 9010
 ```
 
 ### 步骤 2：启动服务
 
 ```bash
-safe-guard start
+ssgc start
 ```
 
 输出含服务映射块（客户端地址 → 本地端口 → 真实上游）和日志路径。
@@ -160,20 +160,20 @@ curl -X POST http://127.0.0.1:9001/v1/chat/completions \
 默认上报间隔 60 秒。等约 1 分钟后查询：
 
 ```bash
-safe-guard report
+ssgc report
 ```
 
 如果想立即看到，可以临时调小上报间隔：
 
 ```bash
-safe-guard config set detector.report_interval_sec 5
-safe-guard restart
+ssgc config set detector.report_interval_sec 5
+ssgc restart
 ```
 
 ### 步骤 5：优雅停止
 
 ```bash
-safe-guard stop
+ssgc stop
 ```
 
 这会触发最后一次 flush + 上报，确保内存里的记录不丢。
@@ -191,8 +191,8 @@ safe-guard stop
 生成 `config.json`（**单服务**，监控多个端点用 `service add`）。**已存在时需 `--force` 才覆盖**。
 
 ```bash
-safe-guard init --api-key "<KEY>" --detector-url "<URL>" --upstream "<监控端点>"
-safe-guard init --api-key "<KEY>" --detector-url "<URL>" --upstream "<URL>" --force  # 覆盖现有
+ssgc init --api-key "<KEY>" --detector-url "<URL>" --upstream "<监控端点>"
+ssgc init --api-key "<KEY>" --detector-url "<URL>" --upstream "<URL>" --force  # 覆盖现有
 
 # 可选参数
 #   --endpoint-type  协议格式（缺省按 URL 猜测）
@@ -211,29 +211,29 @@ safe-guard init --api-key "<KEY>" --detector-url "<URL>" --upstream "<URL>" --fo
 
 ```bash
 # 列出所有监控服务（含客户端配置提示）
-safe-guard service list
+ssgc service list
 
 # 添加（--endpoint-type 缺省按 URL 猜测；--port 缺省从 9001 起自动分配空闲端口）
-safe-guard service add <name> --upstream <URL> [--endpoint-type <T>] [--port <N>]
-safe-guard service add deepseek-claude --upstream https://api.deepseek.com/anthropic
-safe-guard service add local-llm --upstream http://localhost:23333 --port 9010
+ssgc service add <name> --upstream <URL> [--endpoint-type <T>] [--port <N>]
+ssgc service add deepseek-claude --upstream https://api.deepseek.com/anthropic
+ssgc service add local-llm --upstream http://localhost:23333 --port 9010
 
 # 修改（至少一项）
-safe-guard service set <name> [--upstream <URL>] [--port <N>] [--endpoint-type <T>] [--record-body/--no-record-body]
+ssgc service set <name> [--upstream <URL>] [--port <N>] [--endpoint-type <T>] [--record-body/--no-record-body]
 
 # 移除
-safe-guard service remove <name>
+ssgc service remove <name>
 ```
 
 **注意**：
-- 所有修改写入 config.json 后需 `safe-guard restart` 生效
+- 所有修改写入 config.json 后需 `ssgc restart` 生效
 - `service add/set` 会自动检测 upstream 误配成完整端点 URL（如 `.../v1/chat/completions`）并**警告**（路径重复风险，不阻断）
 - name 重名 / 不存在 → 报错 exit 1
 
 #### `validate` — 校验配置
 
 ```bash
-safe-guard validate
+ssgc validate
 # 输出 "config valid" 或具体错误
 ```
 
@@ -241,18 +241,18 @@ safe-guard validate
 
 ```bash
 # 读
-safe-guard config get detector.url
-safe-guard config get detector.api_key --json  # api_key 自动脱敏
+ssgc config get detector.url
+ssgc config get detector.api_key --json  # api_key 自动脱敏
 
 # 写
-safe-guard config set detector.report_interval_sec 30
+ssgc config set detector.report_interval_sec 30
 
 # 删
-safe-guard config unset log_level
+ssgc config unset log_level
 
 # 全部列出
-safe-guard config list
-safe-guard config list --json
+ssgc config list
+ssgc config list --json
 ```
 
 **注意**：
@@ -265,24 +265,24 @@ safe-guard config list --json
 #### `start` — 启动服务（后台）
 
 ```bash
-safe-guard start                          # 默认配置
-safe-guard start --report-interval 5      # 临时覆盖上报间隔（不写入 config）
-safe-guard start --batch-size 100         # 临时覆盖批量大小
-SAITEC_REPORT_INTERVAL=5 safe-guard start  # 等价：env 覆盖
+ssgc start                          # 默认配置
+ssgc start --report-interval 5      # 临时覆盖上报间隔（不写入 config）
+ssgc start --batch-size 100         # 临时覆盖批量大小
+SSGC_REPORT_INTERVAL=5 ssgc start  # 等价：env 覆盖
 ```
 
 `start` 会 fork 子进程跑代理端口。如果服务已在运行，会返回错误 `ALREADY_RUNNING` 提示用 `restart`。
 
-**PID 文件** 写入 `safe-guard.pid`（在 config 所在目录）。
+**PID 文件** 写入 `ssgc.pid`（在 config 所在目录）。
 
 #### `monitor` — 前台实时监控（人盯场景）
 
 ```bash
-safe-guard monitor                     # 前台起服务 + 终端实时输出
-safe-guard monitor --report-interval 5 # 缩短上报周期（violation 更快显示）
+ssgc monitor                     # 前台起服务 + 终端实时输出
+ssgc monitor --report-interval 5 # 缩短上报周期（violation 更快显示）
 ```
 
-一个进程既是服务又是实时面板：正常流量灰色单行简报，**异常彩色醒目**（violation 红色含 reason、上报失败黄色、AUTH 停摆红色）。`Ctrl+C` 或 `safe-guard stop` 优雅退出，退出时打印会话总结（流量数/需关注数/上报失败数）。
+一个进程既是服务又是实时面板：正常流量灰色单行简报，**异常彩色醒目**（violation 红色含 reason、上报失败黄色、AUTH 停摆红色）。`Ctrl+C` 或 `ssgc stop` 优雅退出，退出时打印会话总结（流量数/需关注数/上报失败数）。
 
 与其它监控手段的分工：
 
@@ -297,8 +297,8 @@ safe-guard monitor --report-interval 5 # 缩短上报周期（violation 更快�
 #### `stop` — 优雅停止
 
 ```bash
-safe-guard stop
-safe-guard stop --timeout 30  # 自定义超时（秒，默认 10）
+ssgc stop
+ssgc stop --timeout 30  # 自定义超时（秒，默认 10）
 ```
 
 Windows 实现：先写 `stop.flag` 让子进程优雅关闭（轮询检测），超时后 `taskkill /F` 兜底。
@@ -307,7 +307,7 @@ Unix 实现：`SIGTERM` → 超时后 `SIGKILL`。
 #### `restart` — stop + start
 
 ```bash
-safe-guard restart
+ssgc restart
 ```
 
 适用场景：改了 config 后想让新配置生效。
@@ -315,8 +315,8 @@ safe-guard restart
 #### `status` — 查看运行状态
 
 ```bash
-safe-guard status        # 人类可读
-safe-guard status --json # JSON
+ssgc status        # 人类可读
+ssgc status --json # JSON
 ```
 
 输出 `running`/`pid`/`services`/日志尾部。**注意**：`queue_depth` 字段当前未提供（外部读取无法获真实值）。
@@ -324,32 +324,32 @@ safe-guard status --json # JSON
 #### `logs` — 查看日志
 
 ```bash
-safe-guard logs --tail 50        # 最后 50 行
-safe-guard logs --follow         # 持续跟踪（Ctrl+C 退出）
-safe-guard logs --service svc-a  # 按 service 过滤（简单子串匹配）
+ssgc logs --tail 50        # 最后 50 行
+ssgc logs --follow         # 持续跟踪（Ctrl+C 退出）
+ssgc logs --service svc-a  # 按 service 过滤（简单子串匹配）
 ```
 
-日志文件路径：`{config_dir}/logs/safe-guard.log`。**按日期自动切割**（每日午夜切出 `safe-guard.log.YYYY-MM-DD` 备份，运行期自动保留最近 14 天；手动清理用 `safe-guard purge`）。
+日志文件路径：`{config_dir}/logs/ssgc.log`。**按日期自动切割**（每日午夜切出 `ssgc.log.YYYY-MM-DD` 备份，运行期自动保留最近 14 天；手动清理用 `ssgc purge`）。
 
 ### 4.3 运维类
 
 #### `report` — 查询 SQLite 检测结果
 
 ```bash
-safe-guard report                          # 最近 1 小时
-safe-guard report --since "30m"            # 最近 30 分钟
-safe-guard report --since "2h"             # 最近 2 小时
-safe-guard report --since "7d"             # 最近 7 天
-safe-guard report --since "2026-08-20T00:00:00Z"  # ISO8601
-safe-guard report --service openai-chat-completions --limit 50
-safe-guard report --json
+ssgc report                          # 最近 1 小时
+ssgc report --since "30m"            # 最近 30 分钟
+ssgc report --since "2h"             # 最近 2 小时
+ssgc report --since "7d"             # 最近 7 天
+ssgc report --since "2026-08-20T00:00:00Z"  # ISO8601
+ssgc report --service openai-chat-completions --limit 50
+ssgc report --json
 ```
 
 #### `redo` — 手动重报某条记录（绕过游标）
 
 ```bash
-safe-guard redo <record_id>
-safe-guard redo <record_id> --json
+ssgc redo <record_id>
+ssgc redo <record_id> --json
 ```
 
 适用场景：detector 改算法后想重新评估历史记录。`<record_id>` 是 UUID，从 `logs` 或 `report` 里查。
@@ -357,14 +357,14 @@ safe-guard redo <record_id> --json
 #### `purge` — 清理过期数据
 
 ```bash
-safe-guard purge                    # 删 30 天前的 JSONL + 日志备份 + SQLite
-safe-guard purge --retention-days 7 # 自定义保留期
-safe-guard purge --dry-run          # 只看不动
+ssgc purge                    # 删 30 天前的 JSONL + 日志备份 + SQLite
+ssgc purge --retention-days 7 # 自定义保留期
+ssgc purge --dry-run          # 只看不动
 ```
 
 清理三类：
 - JSONL 记录文件（`records-*.jsonl`，按文件名日期）
-- **日志切割备份**（`safe-guard.log.YYYY-MM-DD`，按文件名日期；活跃的 `safe-guard.log` 不会删）
+- **日志切割备份**（`ssgc.log.YYYY-MM-DD`，按文件名日期；活跃的 `ssgc.log` 不会删）
 - SQLite 中超期的检测记录
 
 > 日志按天自动切割（午夜），服务运行期间自动保留最近 14 天；`purge` 用于手动/更彻底的清理。
@@ -374,9 +374,9 @@ safe-guard purge --dry-run          # 只看不动
 #### `doctor` — 自检
 
 ```bash
-safe-guard doctor               # 全量（含 API 探测）
-safe-guard doctor --quick       # 只查本地（不调 detector）
-safe-guard doctor --json
+ssgc doctor               # 全量（含 API 探测）
+ssgc doctor --quick       # 只查本地（不调 detector）
+ssgc doctor --json
 ```
 
 检查项：
@@ -394,9 +394,9 @@ safe-guard doctor --json
 #### `tail` — 实时跟踪事件流
 
 ```bash
-safe-guard tail                          # 所有 service
-safe-guard tail --service svc-a          # 按 service 过滤
-safe-guard tail --level error            # 按级别过滤（debug/info/warning/error）
+ssgc tail                          # 所有 service
+ssgc tail --service svc-a          # 按 service 过滤
+ssgc tail --level error            # 按级别过滤（debug/info/warning/error）
 ```
 
 类似 `tail -f`，读 JSONL 文件新写入的行。**注：仅适合交互式终端**，Agent 批量查询用 `report`。
@@ -410,11 +410,8 @@ safe-guard tail --level error            # 按级别过滤（debug/info/warning/
 `config.json` 的查找顺序（先找到的优先）：
 
 1. `--config <path>` 命令行参数
-2. 环境变量 `SAITEC_CONFIG`
-3. `platformdirs` 用户配置目录（默认）：
-   - Windows: `%LOCALAPPDATA%\saitec\safe-guard\config.json`
-   - macOS: `~/Library/Application Support/saitec/config.json`
-   - Linux: `~/.config/saitec/config.json`
+2. 环境变量 `SSGC_CONFIG`
+3. 用户主目录（默认）：`~/.ssgc/config.json`（全平台统一）
 
 ### 5.2 字段结构
 
@@ -521,27 +518,27 @@ CLI 不自动加任何后缀——`/v1`、`/chat/completions` 这些路径是客
 
 ### 5.5 配置优先级
 
-CLI 参数 > 环境变量（`SAITEC_*`） > config.json。例如：
+CLI 参数 > 环境变量（`SSGC_*`） > config.json。例如：
 
 ```bash
-SAITEC_REPORT_INTERVAL=5 safe-guard start  # 覆盖 report_interval_sec
-safe-guard start --report-interval 5        # 同上，但 CLI 优先级更高
+SSGC_REPORT_INTERVAL=5 ssgc start  # 覆盖 report_interval_sec
+ssgc start --report-interval 5        # 同上，但 CLI 优先级更高
 ```
 
 常用 env var：
-- `SAITEC_CONFIG` — 配置文件路径
-- `SAITEC_API_KEY` — detector.api_key
-- `SAITEC_DETECTOR_URL` — detector.url
-- `SAITEC_ENDPOINT_PATH` — detector.endpoint_path
-- `SAITEC_REPORT_INTERVAL` — detector.report_interval_sec
-- `SAITEC_BATCH_SIZE` — detector.batch_size
-- `SAITEC_LOG_LEVEL` — log_level
+- `SSGC_CONFIG` — 配置文件路径
+- `SSGC_API_KEY` — detector.api_key
+- `SSGC_DETECTOR_URL` — detector.url
+- `SSGC_ENDPOINT_PATH` — detector.endpoint_path
+- `SSGC_REPORT_INTERVAL` — detector.report_interval_sec
+- `SSGC_BATCH_SIZE` — detector.batch_size
+- `SSGC_LOG_LEVEL` — log_level
 
 ---
 
 ## 6. 集成到你的客户端
 
-`safe-guard` 是**反向代理**，把它放在客户端和大模型 API 之间即可。
+`ssgc` 是**反向代理**，把它放在客户端和大模型 API 之间即可。
 
 ### 6.1 Claude Code
 
@@ -551,7 +548,7 @@ Claude Code 通过环境变量 `ANTHROPIC_BASE_URL` 指定 API 地址：
 # 默认（直连 Anthropic）
 # ANTHROPIC_BASE_URL=https://api.anthropic.com
 
-# 改用 safe-guard 代理
+# 改用 ssgc 代理
 ANTHROPIC_BASE_URL=http://127.0.0.1:9003 claude-code ...
 ```
 
@@ -572,7 +569,7 @@ import openai
 
 client = openai.OpenAI(
     base_url="http://127.0.0.1:9001/v1",  # 注意加 /v1
-    api_key="...",  # 仍需要真实 key（safe-guard 不处理鉴权）
+    api_key="...",  # 仍需要真实 key（ssgc 不处理鉴权）
 )
 
 resp = client.chat.completions.create(
@@ -595,17 +592,17 @@ curl -X POST http://127.0.0.1:9001/v1/chat/completions \
 
 ```bash
 # DeepSeek 的 Anthropic 兼容口（Claude Code 走它）
-safe-guard service add deepseek-claude --upstream https://api.deepseek.com/anthropic
+ssgc service add deepseek-claude --upstream https://api.deepseek.com/anthropic
 #   → 本地 127.0.0.1:9002，ANTHROPIC_BASE_URL=http://127.0.0.1:9002
 
 # 本地部署模型（LM Studio / Ollama / vLLM 等）
-safe-guard service add local-llm --upstream http://localhost:23333 --port 9010
+ssgc service add local-llm --upstream http://localhost:23333 --port 9010
 #   → 本地 127.0.0.1:9010，OPENAI_BASE_URL=http://127.0.0.1:9010/v1
 
 # 中转站 / 网关
-safe-guard service add zen --upstream https://opencode.ai/zen/go/v1 --port 9020
+ssgc service add zen --upstream https://opencode.ai/zen/go/v1 --port 9020
 
-safe-guard restart
+ssgc restart
 ```
 
 然后按 `service list` 输出的客户端配置提示设置对应环境变量即可。
@@ -618,20 +615,20 @@ safe-guard restart
 
 ```bash
 # 看真实状态
-safe-guard status
+ssgc status
 
 # 强制重启
-safe-guard restart
+ssgc restart
 ```
 
 如果 `status` 显示 `running: False` 但 `start` 还说"已在运行"，PID 文件残留（进程死了但文件没清）。手动清理：
 
 ```bash
 # Windows
-del "{config_dir}\safe-guard.pid"
+del "{config_dir}\ssgc.pid"
 
 # Unix
-rm "{config_dir}/safe-guard.pid"
+rm "{config_dir}/ssgc.pid"
 ```
 
 ### 7.2 `report` 报"库不存在"
@@ -650,14 +647,14 @@ rm "{config_dir}/safe-guard.pid"
 **症状**：`logs` 里出现：
 
 ```
-ERROR saitec.runtime.runtime: X-API-Key 失效，停止上报：auth failed (401) at http://detector:8080/detect; 检查 detector.api_key 是否与检测服务器一致，需要重设请用 `safe-guard init --api-key ... --detector-url ... --force`
+ERROR ssgc.runtime.runtime: X-API-Key 失效，停止上报：auth failed (401) at http://detector:8080/detect; 检查 detector.api_key 是否与检测服务器一致，需要重设请用 `ssgc init --api-key ... --detector-url ... --force`
 ```
 
 **修复**：重设 api_key：
 
 ```bash
-safe-guard init --api-key "NEW_KEY" --detector-url "http://detector:8080" --force
-safe-guard restart
+ssgc init --api-key "NEW_KEY" --detector-url "http://detector:8080" --force
+ssgc restart
 ```
 
 ### 7.5 端口被占用
@@ -675,11 +672,11 @@ safe-guard restart
 "error": "upstream error: ..."
 ```
 
-`safe-guard` 不会重试上游——客户端需自己重试。
+`ssgc` 不会重试上游——客户端需自己重试。
 
 ### 7.7 Windows 中文乱码
 
-如果 `safe-guard --help` 输出是 `????`，可能是控制台代码页问题。`safe-guard` 在 pipe 模式下会自动强制 UTF-8，但 tty 下跟随系统。
+如果 `ssgc --help` 输出是 `????`，可能是控制台代码页问题。`ssgc` 在 pipe 模式下会自动强制 UTF-8，但 tty 下跟随系统。
 
 **修复**：
 - 用 Windows Terminal / VS Code 集成终端（默认 UTF-8）
@@ -690,15 +687,15 @@ safe-guard restart
 `doctor` 报 `sqlite status:fail`。**不要手动删 results.db**（会丢历史）。
 
 最可能原因：磁盘满 / 权限错。先看磁盘：```bash
-safe-guard doctor
+ssgc doctor
 # 看 disk 项
 ```
 
-如果磁盘正常但 SQLite 仍坏，把 `results.db` 备份后重命名让 safe-guard 重建（**会丢历史**）：
+如果磁盘正常但 SQLite 仍坏，把 `results.db` 备份后重命名让 ssgc 重建（**会丢历史**）：
 
 ```bash
 mv "{config_dir}/results.db" "{config_dir}/results.db.corrupt"
-safe-guard restart
+ssgc restart
 # 重新发请求触发上报，会自动建新 results.db
 ```
 
@@ -718,7 +715,7 @@ safe-guard restart
 
 ### 8.2 api_key 注入方式
 
-**推荐**：用 `--api-key` 参数（不入 shell history）或 `SAITEC_API_KEY` 环境变量。
+**推荐**：用 `--api-key` 参数（不入 shell history）或 `SSGC_API_KEY` 环境变量。
 
 **避免**：
 - 把 api_key 写在脚本里被 git 提交
@@ -775,9 +772,9 @@ mock 提供：
 临时调小上报间隔（不写 config）：
 
 ```bash
-safe-guard start --report-interval 5  # 5 秒一次
+ssgc start --report-interval 5  # 5 秒一次
 # 或
-SAITEC_REPORT_INTERVAL=5 safe-guard start
+SSGC_REPORT_INTERVAL=5 ssgc start
 ```
 
 发请求后 5 秒即可在 `report` 中查到。
@@ -809,7 +806,7 @@ JSONL 每行一个归一化 Record，包含完整 request/response body。
 ### 9.5 重报某条记录
 
 ```bash
-safe-guard redo <record_id>
+ssgc redo <record_id>
 ```
 
 适用场景：detector 规则更新后想重新评估历史。
@@ -832,23 +829,23 @@ safe-guard redo <record_id>
 
 ## 附录 B：与 Claude Code / Codex 等的协作
 
-`safe-guard` 本身**支持 Agent 操作**——所有命令都有 `--json` 输出，错误信息结构化。
+`ssgc` 本身**支持 Agent 操作**——所有命令都有 `--json` 输出，错误信息结构化。
 
 **典型 Agent 调用流程**：
 
 ```bash
 # 1. 检查是否在跑
-safe-guard status --json
+ssgc status --json
 
 # 2. 如果不在跑
-safe-guard init --api-key "$KEY" --detector-url "$URL" --force
-safe-guard start --json
+ssgc init --api-key "$KEY" --detector-url "$URL" --force
+ssgc start --json
 
 # 3. 健康检查
-safe-guard doctor --json
+ssgc doctor --json
 
 # 4. 查最近结果
-safe-guard report --since "1h" --json
+ssgc report --since "1h" --json
 ```
 
 返回的 JSON 可直接被 Claude / Codex 解析做后续决策。

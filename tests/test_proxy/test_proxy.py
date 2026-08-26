@@ -16,10 +16,10 @@ import pytest
 import pytest_asyncio
 from aiohttp import web
 
-from saitec.adapters import get_adapter
-from saitec.core.models import EndpointSpec
-from saitec.proxy.server import ProxyService
-from saitec.recorder.recorder import Recorder
+from ssgc.adapters import get_adapter
+from ssgc.core.models import EndpointSpec
+from ssgc.proxy.server import ProxyService
+from ssgc.recorder.recorder import Recorder
 
 
 # ============================================================

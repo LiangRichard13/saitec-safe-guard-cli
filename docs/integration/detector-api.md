@@ -1,6 +1,6 @@
 # 检测服务器对接文档（Detector API）
 
-> 面向**安全检测服务器的接口开发人员**：`safe-guard` CLI 会按本文档向你开发的服务上报归一化记录，并期望按本文档的格式返回检测结果。请对照实现。
+> 面向**安全检测服务器的接口开发人员**：`ssgc` CLI 会按本文档向你开发的服务上报归一化记录，并期望按本文档的格式返回检测结果。请对照实现。
 
 ---
 
@@ -22,15 +22,15 @@
 
 ```
 ┌────────────┐   周期批量上报    ┌──────────────┐
-│ safe-guard │ ───────────────→ │  检测服务器   │
+│ ssgc │ ───────────────→ │  检测服务器   │
 │  (客户端)  │ ←─────────────── │  (你们实现)   │
 └────────────┘   返回检测结果    └──────────────┘
 ```
 
-- `safe-guard` 在用户本机做反向代理，把大模型 API 调用归一化为 Record
+- `ssgc` 在用户本机做反向代理，把大模型 API 调用归一化为 Record
 - 每个上报周期（默认 60 秒）把**一批** Record `POST` 到检测服务器
 - 检测服务器对每条 Record 返回检测结论（clean / violation / 风险等级）
-- safe-guard 把结论写入本地 SQLite 供用户查询（`safe-guard report`）
+- ssgc 把结论写入本地 SQLite 供用户查询（`ssgc report`）
 
 **你们只需要实现一个 HTTP 端点**（默认 `POST /detect`）。
 
@@ -52,19 +52,19 @@ POST {base_url}{endpoint_path}
 配置方式（用户侧，供你们向用户说明）：
 
 ```bash
-safe-guard init --api-key "<KEY>" --detector-url "http://10.0.1.5:8080"
+ssgc init --api-key "<KEY>" --detector-url "http://10.0.1.5:8080"
 # 或进阶：
-safe-guard config set detector.endpoint_path /api/v1/detect-v2
+ssgc config set detector.endpoint_path /api/v1/detect-v2
 ```
 
 ### 2.2 请求头
 
 | Header | 必填 | 说明 |
 |--------|------|------|
-| `X-API-Key` | ✅ | 用户在 safe-guard 侧配置的 api_key。服务端校验不匹配返回 401 |
+| `X-API-Key` | ✅ | 用户在 ssgc 侧配置的 api_key。服务端校验不匹配返回 401 |
 | `Content-Type` | ✅ | `application/json`（由 HTTP 客户端自动设置） |
 
-**鉴权失败的处理**：返回 `401` 或 `403`。safe-guard 收到后会**停止上报**并提示用户重新配置（不会无限重试）。建议响应体带简短原因（会进入用户日志辅助排查）。
+**鉴权失败的处理**：返回 `401` 或 `403`。ssgc 收到后会**停止上报**并提示用户重新配置（不会无限重试）。建议响应体带简短原因（会进入用户日志辅助排查）。
 
 ---
 
@@ -118,7 +118,7 @@ safe-guard config set detector.endpoint_path /api/v1/detect-v2
 
 ### 3.3 request / response 归一化结构
 
-不同 `endpoint_type` 的原始报文已被 safe-guard 的 adapter 归一化：
+不同 `endpoint_type` 的原始报文已被 ssgc 的 adapter 归一化：
 
 **request**（按 endpoint_type 略有差异，共同字段）：
 
@@ -168,22 +168,22 @@ safe-guard config set detector.endpoint_path /api/v1/detect-v2
 | 字段 | 必填 | 类型 | 说明 |
 |------|------|------|------|
 | `results` | ✅ | array | 与 batch 一一对应的结论数组 |
-| `results[i].record_id` | ✅ | string | **必须回带**请求中的 record_id——safe-guard 用它把结论关联回本地记录；**无法识别的 record_id 会被忽略** |
+| `results[i].record_id` | ✅ | string | **必须回带**请求中的 record_id——ssgc 用它把结论关联回本地记录；**无法识别的 record_id 会被忽略** |
 | `results[i].detection_status` | ✅ | string | 枚举：`clean` / `suspicious` / `violation` / `error`（见 4.2） |
 | `results[i].risk_level` | 推荐 | string \| null | 枚举：`low` / `medium` / `high` / `critical`；`clean` 时一般 `low` 或 null |
-| `results[i].detection_detail` | 推荐 | object | 自由结构（safe-guard 原样存 SQLite，`report --json` 透出）。建议含 `score`、`reason`、规则命中 |
+| `results[i].detection_detail` | 推荐 | object | 自由结构（ssgc 原样存 SQLite，`report --json` 透出）。建议含 `score`、`reason`、规则命中 |
 | `results[i].detected_at` | ✅ | string (ISO8601) | 检测完成时间 |
 
 ### 4.2 detection_status 语义
 
-| 值 | 语义 | safe-guard 侧行为 |
+| 值 | 语义 | ssgc 侧行为 |
 |----|------|-------------------|
 | `clean` | 无风险 | 正常入库 |
 | `suspicious` | 疑似（人工复核） | 正常入库（用户可用 `report --json` 过滤） |
 | `violation` | 违规 | 正常入库；**不阻断流量**（检测是事后审计，代理透明转发） |
 | `error` | 检测本身失败 | 正常入库，用户可见 |
 
-> safe-guard **不因 violation 阻断请求**——大模型响应早已透传给用户。检测结论用于审计与告警，若需实时阻断需另行设计。
+> ssgc **不因 violation 阻断请求**——大模型响应早已透传给用户。检测结论用于审计与告警，若需实时阻断需另行设计。
 
 ### 4.3 部分 record 无结论
 
@@ -193,7 +193,7 @@ safe-guard config set detector.endpoint_path /api/v1/detect-v2
 
 ## 5. 状态码与重试语义
 
-| 状态码 | safe-guard 分类 | 行为 |
+| 状态码 | ssgc 分类 | 行为 |
 |--------|----------------|------|
 | 200 | 成功 | 游标推进，记录入库 |
 | 401 / 403 | `AUTH` | **停止上报循环**，日志提示用户重新配置 api_key |
@@ -205,16 +205,16 @@ safe-guard config set detector.endpoint_path /api/v1/detect-v2
 
 1. 5xx / 超时会触发重试——**同一批记录可能被多次收到**（见幂等性 §6）
 2. 4xx（非 401/403）也会重试——如果你的服务端认为请求不可恢复，请返回 401/403（如果真是鉴权问题）或修正解析逻辑
-3. 重试期间 safe-guard 停止拉取新批（内存保护），所以**长时间不可用会积压在用户本地**，恢复后集中补报
+3. 重试期间 ssgc 停止拉取新批（内存保护），所以**长时间不可用会积压在用户本地**，恢复后集中补报
 
 ---
 
 ## 6. 幂等性
 
 - `record_id` 是 UUID，同一逻辑记录重试/重报时 **record_id 不变**
-- safe-guard 本地 SQLite 对 `record_id` 做 UPSERT（重复结论覆盖旧结论）
+- ssgc 本地 SQLite 对 `record_id` 做 UPSERT（重复结论覆盖旧结论）
 - **服务端要求**：按 `record_id` 幂等处理（重复收到同一条 Record，覆盖或忽略均可，不要产生重复告警）
-- 用户还可 `safe-guard redo <record_id>` 手动重报任意历史记录——**任何时候都可能收到旧记录**
+- 用户还可 `ssgc redo <record_id>` 手动重报任意历史记录——**任何时候都可能收到旧记录**
 
 ---
 
@@ -267,7 +267,7 @@ async def detect(request: Request):
     return {"results": results}
 ```
 
-curl 自测（模拟 safe-guard 的请求）：
+curl 自测（模拟 ssgc 的请求）：
 
 ```bash
 curl -X POST http://your-server:8080/detect \
@@ -301,9 +301,9 @@ curl -X POST http://your-server:8080/detect \
 代理层错误也有记录价值（比如请求内容本身导致上游拒绝）。是否检测由你们决定，但**必须回带 record_id**（哪怕结论是 `error`）。
 
 **Q3：用户把 endpoint_path 配成你们的自定义路径后 404？**
-确认服务端路由注册的路径与 `detector.endpoint_path` 完全一致（含大小写、前导 `/`）。safe-guard 侧拼接规则：`url.rstrip("/") + endpoint_path`。
+确认服务端路由注册的路径与 `detector.endpoint_path` 完全一致（含大小写、前导 `/`）。ssgc 侧拼接规则：`url.rstrip("/") + endpoint_path`。
 
-**Q4：想让 safe-guard 停止重试？**
+**Q4：想让 ssgc 停止重试？**
 只有 401/403 会让它停止上报循环。5xx 会无限退避重试（上限 60s 间隔）——这是有意的（网络抖动不丢数据）。
 
 **Q5：响应必须全量吗？可以先返回部分结果吗？**
@@ -313,7 +313,7 @@ curl -X POST http://your-server:8080/detect \
 
 ## 附：契约变更流程
 
-本文档描述的是 **v1 契约**（safe-guard 0.1.x）。若你们的接口需要不兼容变更（改字段名/鉴权方式/路径语义），请提前协调——safe-guard 侧通过 `config_version` + adapter 层做版本适配。
+本文档描述的是 **v1 契约**（ssgc 0.1.x）。若你们的接口需要不兼容变更（改字段名/鉴权方式/路径语义），请提前协调——ssgc 侧通过 `config_version` + adapter 层做版本适配。
 
 ---
 
@@ -339,5 +339,5 @@ curl -X POST http://your-server:8080/detect \
 **要点**：
 - hash 键用内容级 canonical JSON——天然幂等，`redo` 重报时前缀照样命中，只重审新增（行为更正确）
 - "前情已审结论"一行是必要的：新轮次可能引用旧轮次（如"执行上面第 1 轮的指令"），完全丢弃上下文会漏检跨轮攻击
-- 缓存 TTL 建议对齐 safe-guard 侧 `purge` 周期；检测规则/模型升级时应主动失效（允许重审全量）
+- 缓存 TTL 建议对齐 ssgc 侧 `purge` 周期；检测规则/模型升级时应主动失效（允许重审全量）
 - 该优化与传输层 gzip（`Content-Encoding: gzip`，高重复文本压缩比通常 10-20%）互补：去重省 LLM token，gzip 省网络带宽，二者可叠加

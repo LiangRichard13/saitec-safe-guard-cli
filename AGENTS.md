@@ -1,21 +1,21 @@
 # AGENTS.md — 项目记忆（开发约定）
 
-> **分工**：开发约定看本文档；项目进度看 [PROGRESS.md](PROGRESS.md)（按需读取）；CLI 使用方法看 `.claude/skills/safe-guard-cli/SKILL.md` 与 `docs/user-guide.md`；检测服务器对接看 `docs/integration/detector-api.md`。本文档不重复它们的内容。
+> **分工**：开发约定看本文档；项目进度看 [PROGRESS.md](PROGRESS.md)（按需读取）；CLI 使用方法看 `.claude/skills/ssgc-cli/SKILL.md` 与 `docs/user-guide.md`；检测服务器对接看 `docs/integration/detector-api.md`。本文档不重复它们的内容。
 >
 > **Claude Code 桥接**：本项目约定统一写在 AGENTS.md（跨工具标准）。Claude Code 不自动读它——本地建一个 `CLAUDE.md` 内容仅一行 `@AGENTS.md` 即可（import 语法，已 gitignore 不入库）。
 
 ## 1. 项目背景
 
-`safe-guard` 是反向代理 CLI：把大模型 API 请求（OpenAI Chat Completions / OpenAI Responses / Anthropic Messages 及任意兼容端点）指到本地端口，透明转发到真实上游，同时记录请求/响应（JSONL）、周期上报到内部安全检测服务器、检测结果落本地 SQLite。
+`ssgc` 是反向代理 CLI：把大模型 API 请求（OpenAI Chat Completions / OpenAI Responses / Anthropic Messages 及任意兼容端点）指到本地端口，透明转发到真实上游，同时记录请求/响应（JSONL）、周期上报到内部安全检测服务器、检测结果落本地 SQLite。
 
-- 技术栈：Python ≥3.10 / aiohttp / typer / rich / SQLite(WAL) / pytest；包名 `saitec-safe-guard-cli`，CLI 命令 `safe-guard`
+- 技术栈：Python ≥3.10 / aiohttp / typer / rich / SQLite(WAL) / pytest；包名 `saitec-safe-guard-cli`，CLI 命令 `ssgc`
 - 单机自用、本地 http 明文（无 MITM）、检测是事后审计（不阻断流量）
 - 当前状态与功能演进见 PROGRESS.md
 
 ## 2. 目录结构
 
 ```
-src/saitec/                  # 六层架构，依赖只能向下（见 §3）
+src/ssgc/                  # 六层架构，依赖只能向下（见 §3）
 ├── core/                    # L1 最底层：models(数据模型) config(加载/校验/三级覆盖)
 │                            #    paths(platformdirs 路径) utils(纯函数)
 ├── recorder/                # L2：recorder.py（内存队列 + JSONL 按天落盘，崩溃恢复源）
@@ -40,7 +40,7 @@ docs/
 ├── integration/detector-api.md  # 检测服务器对接契约（含去重实现建议）
 └── issues/cli-usage-issues.md   # 历史问题清单
 
-.claude/skills/safe-guard-cli/  # 教 Agent 操作本 CLI 的 skill（SKILL.md + references + evals）
+.claude/skills/ssgc-cli/  # 教 Agent 操作本 CLI 的 skill（SKILL.md + references + evals）
 ```
 
 ## 3. 分层原则（维护扩展的铁律）
@@ -113,16 +113,16 @@ docs/
 CLI 全命令支持 `--json`（stdout 结构化、stderr 错误、退出码 0/1/2/3/4），用 bash 断言：
 
 ```bash
-SG="C:/Users/Administrator/anaconda3/envs/saitec-guard/Scripts/safe-guard.exe"
-export SAITEC_CONFIG=/tmp/<隔离目录>/config.json        # 永远用隔离配置，勿动默认配置
+SG="C:/Users/Administrator/anaconda3/envs/saitec-guard/Scripts/ssgc.exe"
+export SSGC_CONFIG=/tmp/<隔离目录>/config.json        # 永远用隔离配置，勿动默认配置
 "$SG" init --api-key mock-test-key --detector-url http://127.0.0.1:8001 --upstream http://localhost:23333 --json | python -c "import sys,json; assert json.load(sys.stdin)['ok']"
 "$SG" status --json | python -c "import sys,json; d=json.load(sys.stdin); assert d['data']['running']"   # 注意：running 判断看字段，exit 0 不代表在跑
 ```
 
 ### 日志与 debug
-- 文件：`{config_dir}/logs/safe-guard.log`（按天切割，保 14 天）；CLI：`safe-guard logs --tail 50`
+- 文件：`{config_dir}/logs/ssgc.log`（按天切割，保 14 天）；CLI：`ssgc logs --tail 50`
 - 关键 grep：`X-API-Key 失效`（detector 401 → 上报停摆）/ `report failed (kind=)`（上报退避重试）/ `Errno 10048`（端口被占）/ `runtime started|stopped`（生命周期）
-- doctor 自检：`safe-guard doctor --json`（config/端口/磁盘/SQLite/JSONL 六项）
+- doctor 自检：`ssgc doctor --json`（config/端口/磁盘/SQLite/JSONL 六项）
 
 ### 端到端调试设施
 - `tests/mock_detector/`：随机模式（无需配置）或 llm 模式（真实 LLM 判定 + 前缀去重，`.env` 配 key 不提交）

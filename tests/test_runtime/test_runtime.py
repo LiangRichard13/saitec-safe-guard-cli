@@ -14,17 +14,17 @@ import aiohttp
 import pytest
 import pytest_asyncio
 
-from saitec.adapters import get_adapter
-from saitec.core.config import ConfigValidationError
-from saitec.core.models import (
+from ssgc.adapters import get_adapter
+from ssgc.core.config import ConfigValidationError
+from ssgc.core.models import (
     AppConfig,
     ConfigSources,
     DetectorConfig,
     EndpointSpec,
     ReportCursor,
 )
-from saitec.core.paths import ensure_dirs
-from saitec.runtime.runtime import Runtime
+from ssgc.core.paths import ensure_dirs
+from ssgc.runtime.runtime import Runtime
 
 
 # ============================================================
@@ -34,12 +34,12 @@ from saitec.runtime.runtime import Runtime
 
 @pytest.fixture
 def config_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """设置 SAITEC_CONFIG 到临时目录，写一份合法 config.json"""
-    monkeypatch.setenv("SAITEC_CONFIG", str(tmp_path / "config.json"))
-    monkeypatch.delenv("SAITEC_API_KEY", raising=False)
-    monkeypatch.delenv("SAITEC_DETECTOR_URL", raising=False)
-    monkeypatch.delenv("SAITEC_LOG_LEVEL", raising=False)
-    monkeypatch.delenv("SAITEC_REPORT_INTERVAL", raising=False)
+    """设置 SSGC_CONFIG 到临时目录，写一份合法 config.json"""
+    monkeypatch.setenv("SSGC_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.delenv("SSGC_API_KEY", raising=False)
+    monkeypatch.delenv("SSGC_DETECTOR_URL", raising=False)
+    monkeypatch.delenv("SSGC_LOG_LEVEL", raising=False)
+    monkeypatch.delenv("SSGC_REPORT_INTERVAL", raising=False)
 
     cfg = {
         "detector": {
@@ -62,7 +62,7 @@ def config_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     }
     (tmp_path / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
     # Runtime 用 resolve_data_dir()，platformdirs 默认到系统目录。我们用 monkeypatch
-    # 让 platformdirs 用 SAITEC_CONFIG 父目录。
+    # 让 platformdirs 用 SSGC_CONFIG 父目录。
     return tmp_path
 
 
@@ -136,12 +136,12 @@ def test_build_from_validation_error(config_dir: Path) -> None:
 
 def test_build_from_config_not_found(tmp_path: Path) -> None:
     """不存在的 config.json"""
-    os.environ["SAITEC_CONFIG"] = str(tmp_path / "nope.json")
+    os.environ["SSGC_CONFIG"] = str(tmp_path / "nope.json")
     try:
         with pytest.raises(FileNotFoundError):
             Runtime.build_from()
     finally:
-        os.environ.pop("SAITEC_CONFIG", None)
+        os.environ.pop("SSGC_CONFIG", None)
 
 
 # ============================================================
@@ -152,7 +152,7 @@ def test_build_from_config_not_found(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_start_stop_lifecycle(config_dir: Path) -> None:
     """start 启动所有 IO 层 + stop 优雅关闭"""
-    # 让 platformdirs 用我们临时目录（通过 SAITEC_CONFIG）
+    # 让 platformdirs 用我们临时目录（通过 SSGC_CONFIG）
     runtime = Runtime.build_from()
     await runtime.start()
     try:
@@ -610,7 +610,7 @@ async def test_replay_unreported_on_restart(
     config_dir: Path, mock_detector_server: tuple
 ) -> None:
     """进程重启后，_replay_unreported 自动续传游标之后的未上报记录"""
-    from saitec.core.models import ReportCursor
+    from ssgc.core.models import ReportCursor
 
     detector_url, _ = mock_detector_server
     cfg_path = config_dir / "config.json"

@@ -2,7 +2,7 @@
 
 一个进程既是 runtime（起代理 + 上报）又是实时输出面板：
 正常流量 dim 单行简报，异常（violation / 上报失败 / AUTH 停摆）彩色醒目。
-Ctrl+C 或 `safe-guard stop`（stop.flag）优雅退出并停服务。
+Ctrl+C 或 `ssgc stop`（stop.flag）优雅退出并停服务。
 
 与 Agent 心跳定时任务互补：monitor 给人看（实时值守），心跳给 Agent 看（异步汇报）。
 无 --json——此命令本质是给人看的实时流。
@@ -43,7 +43,7 @@ def _stop_flag_path(config_path: Path) -> Path:
 
 
 async def _watch_stop_flag(stop_event: asyncio.Event, config_path: Path) -> None:
-    """Windows 上 Ctrl+C 不可靠时，`safe-guard stop` 写 stop.flag 兜底"""
+    """Windows 上 Ctrl+C 不可靠时，`ssgc stop` 写 stop.flag 兜底"""
     flag = _stop_flag_path(config_path)
     while not stop_event.is_set():
         await asyncio.sleep(0.5)
@@ -130,7 +130,7 @@ async def _monitor_main(config_path: Path, report_interval: int | None,
         console.print(f"{FAIL} 启动失败: {e}")
         return 2
 
-    print_banner("🛰️ monitor 模式 · Ctrl+C 退出（safe-guard stop 亦可）")
+    print_banner("🛰️ monitor 模式 · Ctrl+C 退出（ssgc stop 亦可）")
     console.print(format_services_block(started_services))
     console.print(f"[dim]检测服务器: {runtime.config.detector.url} · "
                   f"上报周期 {runtime.config.detector.report_interval_sec}s[/dim]")
@@ -161,11 +161,11 @@ def monitor_cmd(
     ctx: typer.Context,
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     report_interval: int | None = typer.Option(
-        None, "--report-interval", envvar="SAITEC_REPORT_INTERVAL",
+        None, "--report-interval", envvar="SSGC_REPORT_INTERVAL",
         help="临时覆盖上报周期秒数（monitor 场景常调小，如 5）",
     ),
     batch_size: int | None = typer.Option(
-        None, "--batch-size", envvar="SAITEC_BATCH_SIZE", help="临时覆盖批量大小",
+        None, "--batch-size", envvar="SSGC_BATCH_SIZE", help="临时覆盖批量大小",
     ),
 ) -> None:
     """前台实时监控：起服务 + 终端实时输出异常（Ctrl+C 退出）"""

@@ -1,10 +1,10 @@
-# safe-guard CLI 鲁棒性问题清单
+# ssgc CLI 鲁棒性问题清单
 
 > 通过在 saitec-guard 环境里实际使用 CLI（init → start → 发请求 → status → report → doctor → stop → restart）逐个暴露并记录。
 
 | # | 级别 | 模块 | 现象 | 根因 | 状态 |
 |---|------|------|------|------|------|
-| 1 | P0 | cli/_serve.py | `safe-guard start` 返回 ok 但子进程秒崩，端口全无 | `_serve.py` 顶层使用 `from ..runtime.runtime import Runtime` 相对导入；被 `start.py` 以 `python _serve.py <path>` 方式 fork 调用时无父包，ImportError | **已修**：改为 `from saitec.runtime.runtime import Runtime` 绝对导入 |
+| 1 | P0 | cli/_serve.py | `ssgc start` 返回 ok 但子进程秒崩，端口全无 | `_serve.py` 顶层使用 `from ..runtime.runtime import Runtime` 相对导入；被 `start.py` 以 `python _serve.py <path>` 方式 fork 调用时无父包，ImportError | **已修**：改为 `from ssgc.runtime.runtime import Runtime` 绝对导入 |
 | 2 | P1 | cli/commands/doctor.py | 服务运行中 `doctor` 报 `port:9001/9002/9003 status:fail` | `_check_port_free()` 用 `bind()` 检测端口空闲，但 service 自身正在监听，bind 必然失败被误判 | **已修**：新增 `_check_port(port, service_running)`，服务运行时用 `connect` 验证被监听；未运行时仍用 `bind` 验证可绑 |
 | 3 | P1 | cli/main.py | 中文 help/报错在 GBK 代码页下显示 `?` | Python 在 Windows pipe 模式下 stdout 编码 fallback 到 gbk，与 source 的 UTF-8 中文字符串编码冲突 | **已修**：CLI 入口 `_configure_io_encoding()` —— pipe 时强制 UTF-8（Agent JSON 解析必须），tty 时跟随系统编码 |
 | 4 | P2 | cli/commands/status.py | `queue_depth: N/A`（人类可读形态） | 硬编码字符串误导用户，实际 status 命令通过 PID 文件从外部读取，无法获取 queue_depth | **已修**：删除 `queue_depth` 字段（避免误导），等未来有 IPC 时再加 |
@@ -25,4 +25,4 @@
 1. 起 mock detector + mock upstream → init → start → curl 发请求 → status / doctor / report 验证
 2. 故意填错 api_key 验证 AUTH 错误信息完整
 3. 故意填短 api_key / 非法 URL 验证 init 校验
-4. `safe-guard stop` 优雅关闭
+4. `ssgc stop` 优雅关闭

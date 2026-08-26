@@ -132,7 +132,7 @@ def doctor(
         checks.append({
             "name": "api_key",
             "status": "ok" if api_key else "fail",
-            "detail": "已配置" if api_key else "未配置（用 safe-guard init）",
+            "detail": "已配置" if api_key else "未配置（用 ssgc init）",
         })
 
     all_ok = all(c["status"] == "ok" for c in checks)

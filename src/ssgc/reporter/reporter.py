@@ -92,7 +92,7 @@ class Reporter:
                     raise ReportError(
                         ReportErrorKind.AUTH,
                         f"auth failed ({resp.status}) at {url}; 检查 detector.api_key 是否与检测服务器一致，"
-                        f"需要重设请用 `safe-guard init --api-key ... --detector-url ... --force`",
+                        f"需要重设请用 `ssgc init --api-key ... --detector-url ... --force`",
                     )
                 if 400 <= resp.status < 500:
                     body = await resp.text()

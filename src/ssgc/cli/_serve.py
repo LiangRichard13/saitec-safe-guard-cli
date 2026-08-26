@@ -1,4 +1,4 @@
-"""后台服务入口 — 被 `safe-guard start` 以子进程方式调用
+"""后台服务入口 — 被 `ssgc start` 以子进程方式调用
 
 运行 Runtime（前台），接收 SIGTERM（Unix）或 stop.flag 文件（Windows 兼容）优雅关闭。
 **不对外注册 CLI 命令**。
@@ -12,25 +12,25 @@ import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-# _serve.py 被 `safe-guard start` 以独立脚本方式（`python _serve.py <config>`）
+# _serve.py 被 `ssgc start` 以独立脚本方式（`python _serve.py <config>`）
 # 调用，此时相对导入（`from ..runtime...`）没有父包会 ImportError，
-# 因此这里用绝对导入（前提：saitec 已 pip 安装，见 pyproject 的 [project.scripts]）。
-from saitec.runtime.runtime import Runtime
+# 因此这里用绝对导入（前提：ssgc 已 pip 安装，见 pyproject 的 [project.scripts]）。
+from ssgc.runtime.runtime import Runtime
 
 
-STOP_FLAG_NAME = "safe-guard.stop.flag"
+STOP_FLAG_NAME = "ssgc.stop.flag"
 
-# 日志按天切割（午夜），运行期自动保留最近 N 天；更彻底/及时的清理用 `safe-guard purge`
+# 日志按天切割（午夜），运行期自动保留最近 N 天；更彻底/及时的清理用 `ssgc purge`
 LOG_BACKUP_COUNT = 14
 
 
 def _setup_logging(config_path: Path, log_level: str) -> None:
     logs_dir = config_path.parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    # 按日期切割：切割后备份名为 safe-guard.log.YYYY-MM-DD；
+    # 按日期切割：切割后备份名为 ssgc.log.YYYY-MM-DD；
     # Windows 下仅本进程持有写句柄，轮转无锁冲突
     handler = TimedRotatingFileHandler(
-        logs_dir / "safe-guard.log",
+        logs_dir / "ssgc.log",
         when="midnight",
         backupCount=LOG_BACKUP_COUNT,
         encoding="utf-8",

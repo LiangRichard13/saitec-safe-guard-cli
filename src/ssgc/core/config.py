@@ -26,15 +26,15 @@ from .models import (
 # 环境变量映射：env_var → ((section, field), type)
 # section=None 表示顶层字段
 _DETECTOR_ENV_MAP: dict[str, tuple[tuple[str, str], type]] = {
-    "SAITEC_DETECTOR_URL": (("detector", "url"), str),
-    "SAITEC_API_KEY": (("detector", "api_key"), str),
-    "SAITEC_ENDPOINT_PATH": (("detector", "endpoint_path"), str),
-    "SAITEC_REPORT_INTERVAL": (("detector", "report_interval_sec"), int),
-    "SAITEC_BATCH_SIZE": (("detector", "batch_size"), int),
-    "SAITEC_MAX_QUEUE_SIZE": (("detector", "max_queue_size"), int),
+    "SSGC_DETECTOR_URL": (("detector", "url"), str),
+    "SSGC_API_KEY": (("detector", "api_key"), str),
+    "SSGC_ENDPOINT_PATH": (("detector", "endpoint_path"), str),
+    "SSGC_REPORT_INTERVAL": (("detector", "report_interval_sec"), int),
+    "SSGC_BATCH_SIZE": (("detector", "batch_size"), int),
+    "SSGC_MAX_QUEUE_SIZE": (("detector", "max_queue_size"), int),
 }
 _TOP_LEVEL_ENV_MAP: dict[str, tuple[tuple[str], type]] = {
-    "SAITEC_LOG_LEVEL": (("log_level",), str),
+    "SSGC_LOG_LEVEL": (("log_level",), str),
 }
 
 # CLI 参数映射：kwarg → ((section, field), type)
@@ -187,12 +187,12 @@ def load_config_json(path: Path) -> AppConfig:
 
 
 def apply_env_overrides(config: AppConfig) -> AppConfig:
-    """应用 `SAITEC_*` 环境变量覆盖
+    """应用 `SSGC_*` 环境变量覆盖
 
     支持：
-    - `SAITEC_DETECTOR_*` 覆盖 detector 字段
-    - `SAITEC_LOG_LEVEL` 覆盖顶层 log_level
-    - `SAITEC_<NAME>_PORT/UPSTREAM/RECORD_BODY` 覆盖 service 字段
+    - `SSGC_DETECTOR_*` 覆盖 detector 字段
+    - `SSGC_LOG_LEVEL` 覆盖顶层 log_level
+    - `SSGC_<NAME>_PORT/UPSTREAM/RECORD_BODY` 覆盖 service 字段
     """
     new_config = copy.deepcopy(config)
     env = os.environ
@@ -210,14 +210,14 @@ def apply_env_overrides(config: AppConfig) -> AppConfig:
     # service 维度（按 service 别名前缀，大小写不敏感）
     name_to_idx = {s.name.upper(): i for i, s in enumerate(new_config.services)}
     for env_var, value in env.items():
-        if not env_var.startswith("SAITEC_"):
+        if not env_var.startswith("SSGC_"):
             continue
         # 跳过已处理的 detector / 顶层
         if env_var in _DETECTOR_ENV_MAP or env_var in _TOP_LEVEL_ENV_MAP:
             continue
-        # SAITEC_<NAME>_<FIELD>（NAME 是大写）
+        # SSGC_<NAME>_<FIELD>（NAME 是大写）
         for upper_name, idx in name_to_idx.items():
-            prefix = f"SAITEC_{upper_name}_"
+            prefix = f"SSGC_{upper_name}_"
             if env_var.startswith(prefix):
                 suffix = env_var[len(prefix):]
                 if suffix in _SERVICE_FIELD_BY_SUFFIX:
@@ -403,7 +403,7 @@ def load_config_with_overrides(
     # 收集生效的 env 变量名（用于 `config list` 输出）
     env = os.environ
     for env_var in env:
-        if env_var.startswith("SAITEC_"):
+        if env_var.startswith("SSGC_"):
             sources.env_vars[env_var] = env[env_var]
 
     errors = validate_config(final_config)

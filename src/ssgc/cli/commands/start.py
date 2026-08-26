@@ -34,13 +34,13 @@ def start_cmd(
     report_interval: int | None = typer.Option(
         None,
         "--report-interval",
-        envvar="SAITEC_REPORT_INTERVAL",
+        envvar="SSGC_REPORT_INTERVAL",
         help="覆盖 detector.report_interval_sec",
     ),
     batch_size: int | None = typer.Option(
         None,
         "--batch-size",
-        envvar="SAITEC_BATCH_SIZE",
+        envvar="SSGC_BATCH_SIZE",
         help="覆盖 detector.batch_size",
     ),
 ) -> None:
@@ -83,19 +83,19 @@ def start_cmd(
     if pid is not None and is_pid_alive(pid):
         emit(json_output=json_output, ok=False,
              error={"code": "ALREADY_RUNNING",
-                    "message": f"服务已在运行 (PID {pid})。如需重启用 `safe-guard restart`"},
+                    "message": f"服务已在运行 (PID {pid})。如需重启用 `ssgc restart`"},
              exit_code=EXIT_RUNTIME_ERROR)
         return
 
     # 3. 启动子进程（foreground serve）
     serve_script = Path(__file__).parent.parent / "_serve.py"
     cmd = [sys.executable, str(serve_script), str(path)]
-    # P1-9：CLI 覆盖转 SAITEC_* env 让子进程生效（_serve.py 走 env 覆盖）
+    # P1-9：CLI 覆盖转 SSGC_* env 让子进程生效（_serve.py 走 env 覆盖）
     env_overrides: dict[str, str] = {}
     if report_interval is not None:
-        env_overrides["SAITEC_REPORT_INTERVAL"] = str(report_interval)
+        env_overrides["SSGC_REPORT_INTERVAL"] = str(report_interval)
     if batch_size is not None:
-        env_overrides["SAITEC_BATCH_SIZE"] = str(batch_size)
+        env_overrides["SSGC_BATCH_SIZE"] = str(batch_size)
     child_env = os.environ.copy()
     child_env.update(env_overrides)
     try:
@@ -136,7 +136,7 @@ def start_cmd(
                      s["name"]: _client_env_hint(s["endpoint_type"], s["port"])
                      for s in services_list
                  },
-                 "log_file": str(path.parent / "logs" / "safe-guard.log"),
+                 "log_file": str(path.parent / "logs" / "ssgc.log"),
                  "applied_overrides": env_overrides,
              })
     else:
@@ -145,7 +145,7 @@ def start_cmd(
         console.print()
         console.print(format_services_block(services_list))
         console.print()
-        console.print(f"[dim]日志: {path.parent / 'logs' / 'safe-guard.log'}[/dim]")
+        console.print(f"[dim]日志: {path.parent / 'logs' / 'ssgc.log'}[/dim]")
         if env_overrides:
             console.print(f"[dim]临时覆盖: {env_overrides}[/dim]")
         console.print()

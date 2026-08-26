@@ -1,4 +1,4 @@
-# safe-guard 深入操作参考
+# ssgc 深入操作参考
 
 SKILL.md 覆盖高频操作；本文件是排错手册与低频操作细节。按需阅读对应小节。
 
@@ -14,23 +14,23 @@ SKILL.md 覆盖高频操作；本文件是排错手册与低频操作细节。�
 ## 1. 完整排错手册
 
 ### start 后 status 显示未运行
-看 `{config_dir}/logs/safe-guard.log` 尾部。最常见：端口被占（`Errno 10048`）——另一个 safe-guard 实例还在（可能用了不同 SAITEC_CONFIG），`stop` 它或给新实例换端口。
+看 `{config_dir}/logs/ssgc.log` 尾部。最常见：端口被占（`Errno 10048`）——另一个 ssgc 实例还在（可能用了不同 SSGC_CONFIG），`stop` 它或给新实例换端口。
 
 ### ALREADY_RUNNING 但实际没在跑
-PID 文件残留（进程死了没清）。删 `{config_dir}/safe-guard.pid` 后重试。`stop` 命令自身也能清理（报 STALE_PID 并自动删）。
+PID 文件残留（进程死了没清）。删 `{config_dir}/ssgc.pid` 后重试。`stop` 命令自身也能清理（报 STALE_PID 并自动删）。
 
 ### detector 401 / 上报停摆
 日志出现 `X-API-Key 失效，停止上报：auth failed (401) at <url>`。这是**故意停摆**（避免无限重试锁死账号）。修复：
 
 ```bash
-safe-guard config set detector.api_key NEW_KEY --json
-safe-guard restart --json
+ssgc config set detector.api_key NEW_KEY --json
+ssgc restart --json
 ```
 
 未上报的记录不会丢：JSONL 落盘先于上报，重启后 `_replay_unreported` 按游标自动续传。
 
 ### detector 5xx / 不可达
-指数退避重试（2s→4s→…→上限 60s），pending 批保留不丢。恢复后自动补报。无需干预，除非长时间不可达——查 `safe-guard logs --tail 50` 的 `report failed (kind=SERVER)`。
+指数退避重试（2s→4s→…→上限 60s），pending 批保留不丢。恢复后自动补报。无需干预，除非长时间不可达——查 `ssgc logs --tail 50` 的 `report failed (kind=SERVER)`。
 
 ### report 空结果三连查
 1. 时间窗口：`--since 30m` 改 `--since 7d`
@@ -42,7 +42,7 @@ safe-guard restart --json
 
 ```bash
 mv {config_dir}/results.db {config_dir}/results.db.corrupt
-safe-guard restart --json
+ssgc restart --json
 ```
 
 JSONL 是完整原始记录，历史可从 JSONL 重报（`redo`）恢复。
@@ -71,7 +71,7 @@ uvicorn server:app --app-dir tests/mock_detector --host 127.0.0.1 --port 8000 &
 MOCK_DETECTION_MODE=llm uvicorn server:app --app-dir tests/mock_detector --host 127.0.0.1 --port 8000 &
 ```
 
-接入：`safe-guard init --api-key mock-test-key --detector-url http://127.0.0.1:8000 --upstream <端点>`。
+接入：`ssgc init --api-key mock-test-key --detector-url http://127.0.0.1:8000 --upstream <端点>`。
 
 验证上报到达：`curl -s http://127.0.0.1:8000/records | python -m json.tool`（mock 内存里的记录）。
 
@@ -84,8 +84,8 @@ MOCK_DETECTION_MODE=llm uvicorn server:app --app-dir tests/mock_detector --host 
 ### redo（重报单条）
 
 ```bash
-safe-guard report --since 7d --json | jq -r '.data.results[0].record_id'   # 拿全量 record_id
-safe-guard redo <record_id> --json
+ssgc report --since 7d --json | jq -r '.data.results[0].record_id'   # 拿全量 record_id
+ssgc redo <record_id> --json
 ```
 
 用途：detector 规则更新后重新评估历史记录。record_id 从 JSONL（`{config_dir}/records/records-*.jsonl`）或 report 查。
@@ -93,16 +93,16 @@ safe-guard redo <record_id> --json
 ### purge（清理）
 
 ```bash
-safe-guard purge --retention-days 30 --dry-run --json   # 预览
-safe-guard purge --retention-days 30 --json             # 执行
+ssgc purge --retention-days 30 --dry-run --json   # 预览
+ssgc purge --retention-days 30 --json             # 执行
 ```
 
-清理三类：超期 JSONL、日志切割备份（`safe-guard.log.YYYY-MM-DD`）、SQLite 超期行。活跃日志文件和未超期数据不动。
+清理三类：超期 JSONL、日志切割备份（`ssgc.log.YYYY-MM-DD`）、SQLite 超期行。活跃日志文件和未超期数据不动。
 
 ### 日志
 
-- 文件：`{config_dir}/logs/safe-guard.log`（每日午夜切割，自动保留 14 天）
-- CLI：`safe-guard logs --tail 100 [--service NAME]`（子串过滤）
+- 文件：`{config_dir}/logs/ssgc.log`（每日午夜切割，自动保留 14 天）
+- CLI：`ssgc logs --tail 100 [--service NAME]`（子串过滤）
 - 上报循环的关键日志行：`runtime started` / `report failed (kind=...)` / `X-API-Key 失效` / `runtime stopped`
 
 ---
@@ -122,9 +122,9 @@ safe-guard purge --retention-days 30 --json             # 执行
 ## 5. 配置体系细节
 
 ### 三级优先级
-CLI 参数 > 环境变量（`SAITEC_*`） > config.json。
+CLI 参数 > 环境变量（`SSGC_*`） > config.json。
 
-常用环境变量：`SAITEC_CONFIG`（配置路径）· `SAITEC_API_KEY` · `SAITEC_DETECTOR_URL` · `SAITEC_ENDPOINT_PATH` · `SAITEC_REPORT_INTERVAL` · `SAITEC_BATCH_SIZE` · `SAITEC_LOG_LEVEL` · `SAITEC_<SERVICE_NAME>_UPSTREAM/PORT`（service 级覆盖）。
+常用环境变量：`SSGC_CONFIG`（配置路径）· `SSGC_API_KEY` · `SSGC_DETECTOR_URL` · `SSGC_ENDPOINT_PATH` · `SSGC_REPORT_INTERVAL` · `SSGC_BATCH_SIZE` · `SSGC_LOG_LEVEL` · `SSGC_<SERVICE_NAME>_UPSTREAM/PORT`（service 级覆盖）。
 
 ### config.json 结构（dot-path 操作对象）
 
@@ -143,8 +143,8 @@ CLI 参数 > 环境变量（`SAITEC_*`） > config.json。
 ```
 {config_dir}/
 ├── config.json
-├── safe-guard.pid            # 运行时 PID
+├── ssgc.pid            # 运行时 PID
 ├── records/*.jsonl           # 原始记录（按天分片，崩溃恢复源）
 ├── results.db                # 检测结果（SQLite WAL）
-└── logs/safe-guard.log[.YYYY-MM-DD]
+└── logs/ssgc.log[.YYYY-MM-DD]
 ```

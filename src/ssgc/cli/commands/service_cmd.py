@@ -1,7 +1,7 @@
 """service — 监控服务的增删改查（add / remove / set / list）
 
 管理 config.json 里的 services 数组：要监控哪些上游端点、各用什么协议
-格式、本地监听哪个端口。改完需 `safe-guard restart` 生效。
+格式、本地监听哪个端口。改完需 `ssgc restart` 生效。
 """
 from __future__ import annotations
 
@@ -124,7 +124,7 @@ def list_cmd(
         emit(json_output=True, data={
             "count": len(services),
             "services": services,
-            "note": "修改后需 `safe-guard restart` 生效",
+            "note": "修改后需 `ssgc restart` 生效",
         })
     else:
         emit(json_output=False, data=format_services_block(services))
@@ -203,7 +203,7 @@ def add_cmd(
         "endpoint_type": endpoint_type,
         "endpoint_type_guessed": guessed,
         "record_body": record_body,
-        "note": "重启后生效: safe-guard restart",
+        "note": "重启后生效: ssgc restart",
     }
     if warnings and json_output:
         result["warnings"] = warnings
@@ -240,7 +240,7 @@ def remove_cmd(
         return
     emit(json_output=json_output,
          data={"removed": name, "remaining": len(data["services"]),
-               "note": "重启后生效: safe-guard restart"})
+               "note": "重启后生效: ssgc restart"})
 
 
 # ============================================================
@@ -305,7 +305,7 @@ def set_cmd(
 
     _emit_warnings(json_output, warnings)
     result: dict[str, Any] = {"changed": name, "changes": changes,
-                              "note": "重启后生效: safe-guard restart"}
+                              "note": "重启后生效: ssgc restart"}
     if warnings and json_output:
         result["warnings"] = warnings
     emit(json_output=json_output, data=result)

@@ -11,8 +11,8 @@ import pytest
 import pytest_asyncio
 from aiohttp import web
 
-from saitec.core.models import DetectorConfig, Record
-from saitec.reporter.reporter import ReportError, ReportErrorKind, Reporter
+from ssgc.core.models import DetectorConfig, Record
+from ssgc.reporter.reporter import ReportError, ReportErrorKind, Reporter
 
 
 # ============================================================

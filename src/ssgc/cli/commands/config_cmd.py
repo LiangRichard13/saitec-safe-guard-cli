@@ -281,7 +281,7 @@ def set_cmd(
                 err_console.print(f"{WARN} {w}")
 
     result: dict[str, Any] = {"key": key, "value": parsed, "saved": True,
-                              "note": "修改已保存。重启后生效（safe-guard restart）"}
+                              "note": "修改已保存。重启后生效（ssgc restart）"}
     if warnings and json_output:
         result["warnings"] = warnings
     emit(json_output=json_output, data=result)
@@ -362,20 +362,20 @@ def list_cmd(
 def _env_var_for_field(field: str) -> str | None:
     """字段 → 环境变量名（若可覆盖）"""
     mapping = {
-        "detector.url": "SAITEC_DETECTOR_URL",
-        "detector.api_key": "SAITEC_API_KEY",
-        "detector.endpoint_path": "SAITEC_ENDPOINT_PATH",
-        "detector.report_interval_sec": "SAITEC_REPORT_INTERVAL",
-        "detector.batch_size": "SAITEC_BATCH_SIZE",
-        "detector.max_queue_size": "SAITEC_MAX_QUEUE_SIZE",
-        "log_level": "SAITEC_LOG_LEVEL",
+        "detector.url": "SSGC_DETECTOR_URL",
+        "detector.api_key": "SSGC_API_KEY",
+        "detector.endpoint_path": "SSGC_ENDPOINT_PATH",
+        "detector.report_interval_sec": "SSGC_REPORT_INTERVAL",
+        "detector.batch_size": "SSGC_BATCH_SIZE",
+        "detector.max_queue_size": "SSGC_MAX_QUEUE_SIZE",
+        "log_level": "SSGC_LOG_LEVEL",
     }
     if field in mapping:
         return mapping[field]
     # services.<name>.<suffix>
     m = re.match(r"^services\.(.+)\.(port|upstream|record_body)$", field)
     if m:
-        return f"SAITEC_{m.group(1).upper()}_{m.group(2).upper()}"
+        return f"SSGC_{m.group(1).upper()}_{m.group(2).upper()}"
     return None
 
 

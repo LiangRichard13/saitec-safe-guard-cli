@@ -2,7 +2,7 @@
 
 > 监控大模型 API 调用的反向代理 CLI：让"请求/响应"经过本工具，便于安全检测与审计。
 
-把 Claude Code / Codex / 自写脚本的大模型请求指到本地 9001-9003 端口，`safe-guard` 会透明转发到上游、按周期上报归一化记录到内部检测服务器、写检测结果到本地 SQLite。
+把 Claude Code / Codex / 自写脚本的大模型请求指到本地 9001-9003 端口，`ssgc` 会透明转发到上游、按周期上报归一化记录到内部检测服务器、写检测结果到本地 SQLite。
 
 ## 快速上手
 
@@ -10,13 +10,13 @@
 pip install saitec-safe-guard-cli
 
 # --upstream 指明要监控的大模型端点（官方 / 其他厂商兼容口 / 本地模型均可）
-safe-guard init --api-key "<KEY>" --detector-url "http://detector:8080" \
+ssgc init --api-key "<KEY>" --detector-url "http://detector:8080" \
     --upstream "https://api.deepseek.com/anthropic"
 
 # 要监控更多端点？逐个加：
-safe-guard service add local-llm --upstream http://localhost:23333
+ssgc service add local-llm --upstream http://localhost:23333
 
-safe-guard start
+ssgc start
 
 # 按输出提示把客户端 base_url 指到本地端口即可（OPENAI_BASE_URL / ANTHROPIC_BASE_URL）
 ```
@@ -42,7 +42,7 @@ safe-guard start
 | 运维 | `report` · `redo` · `purge` |
 | 调试 | `doctor` · `tail` |
 
-每个命令都支持 `--json` 输出（Agent 友好，`monitor` 除外——它是给人看的实时流）和 `--config <path>`（自定义配置文件位置）。`safe-guard monitor` 为前台实时监控：正常流量灰色简报、violation/上报失败彩色醒目，适合安全值守场景。
+每个命令都支持 `--json` 输出（Agent 友好，`monitor` 除外——它是给人看的实时流）和 `--config <path>`（自定义配置文件位置）。`ssgc monitor` 为前台实时监控：正常流量灰色简报、violation/上报失败彩色醒目，适合安全值守场景。
 
 ## 安装选项
 
@@ -76,7 +76,7 @@ pip install -e ".[dev]"
 ## 项目结构
 
 ```
-src/saitec/
+src/ssgc/
 ├── core/         # Layer 1：数据模型 + 配置 + 路径 + 工具
 ├── recorder/     # Layer 2：记录器（JSONL 落盘）
 ├── reporter/     # Layer 2：上报器（HTTP POST）
@@ -102,8 +102,8 @@ tests/
 ## 项目命名
 
 - **GitHub / PyPI**：`saitec-safe-guard-cli`
-- **Python 包**：`saitec`（命名空间，公司名）
-- **CLI 命令**：`safe-guard`
+- **Python 包**：`ssgc`（代码内简写，与 CLI 命令一致）
+- **CLI 命令**：`ssgc`
 
 ## 许可证
 

@@ -1,6 +1,6 @@
 # Mock 检测服务器
 
-模拟单位内部安全检测服务的 FastAPI 服务器，供 `safe-guard` 本地联调用。
+模拟单位内部安全检测服务的 FastAPI 服务器，供 `ssgc` 本地联调用。
 
 **两种检测模式**（`MOCK_DETECTION_MODE`）：
 
@@ -10,7 +10,7 @@
 | `llm` | 把每条记录的请求/回复内容发给**真实大模型**（OpenAI 兼容 API）判断安全性 |
 
 端点：
-- `POST /detect` 接收 `safe-guard` 的批量上报
+- `POST /detect` 接收 `ssgc` 的批量上报
 - `GET /records` 查询已处理记录（内存 list）
 - `GET /health` 健康检查（含当前检测模式）
 
@@ -53,13 +53,13 @@ MOCK_LLM_MODEL=deepseek-chat
 | `MOCK_LLM_BASE_URL` | `https://api.deepseek.com/v1` | OpenAI 兼容端点 |
 | `MOCK_LLM_API_KEY` | —（必填） | 端点的 API key，缺失时启动即报错 |
 | `MOCK_LLM_MODEL` | `deepseek-chat` | 判定用的模型名 |
-| `MOCK_LLM_TIMEOUT_SEC` | `25` | 单条判定超时（safe-guard 侧总超时 30s，勿超过） |
+| `MOCK_LLM_TIMEOUT_SEC` | `25` | 单条判定超时（ssgc 侧总超时 30s，勿超过） |
 
 ### 公共
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `MOCK_DETECTION_API_KEY` | `mock-test-key` | 期望的 `X-API-Key`（safe-guard 侧的 detector.api_key） |
+| `MOCK_DETECTION_API_KEY` | `mock-test-key` | 期望的 `X-API-Key`（ssgc 侧的 detector.api_key） |
 | `MOCK_DETECTION_HOST` / `MOCK_DETECTION_PORT` | `127.0.0.1` / `8000` | 仅 `python server.py` 直跑生效 |
 
 ## llm 模式行为细节
@@ -72,27 +72,27 @@ MOCK_LLM_MODEL=deepseek-chat
 - **失败降级**：LLM 网络/超时/解析失败 → 该条结论为 `detection_status=error`（detail.reason 含失败原因），**不阻断**整批上报——契约与 `docs/integration/detector-api.md` §4.2 一致
 - 注意成本：去重后每条新增内容 ≈ 一次小 LLM 调用，但仍随流量线性增长
 
-## 与 safe-guard 集成
+## 与 ssgc 集成
 
 ```bash
 # 1. 起 mock detector（另一终端，任一模式）
 uvicorn server:app --app-dir tests/mock_detector --host 127.0.0.1 --port 8000
 
-# 2. 用 mock 地址初始化 safe-guard
-safe-guard init --api-key mock-test-key --detector-url http://127.0.0.1:8000 \
+# 2. 用 mock 地址初始化 ssgc
+ssgc init --api-key mock-test-key --detector-url http://127.0.0.1:8000 \
     --upstream <你要监控的端点>
 
-# 3. 启动 safe-guard（后台代理 + 定时上报）
-safe-guard start
+# 3. 启动 ssgc（后台代理 + 定时上报）
+ssgc start
 
 # 4. 发消息（或用 test_chat/chat_probe.py 批量发）
 
 # 5. 等 report_interval_sec（默认 60s）后查看
 curl http://127.0.0.1:8000/records | python -m json.tool   # mock 侧
-safe-guard report --json                                       # safe-guard 本地 SQLite
+ssgc report --json                                       # ssgc 本地 SQLite
 ```
 
-> 想立刻看到上报结果，可先 `safe-guard config set detector.report_interval_sec 5` 再 `safe-guard restart`。
+> 想立刻看到上报结果，可先 `ssgc config set detector.report_interval_sec 5` 再 `ssgc restart`。
 
 ## 手动测试端点
 

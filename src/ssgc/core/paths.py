@@ -1,26 +1,24 @@
-"""路径解析（与 docs/design/saitec-safe-guard-cli-design.md §16 一致）
+"""路径解析
 
-仅依赖 `platformdirs`，无任何 IO。
+仅标准库，无任何 IO。数据根目录为 `~/.ssgc`（品牌统一 SSGC）。
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from platformdirs import user_data_dir
-
-APP_NAME = "saitec"
+APP_NAME = "ssgc"
 
 
 def resolve_config_dir() -> Path:
     """解析配置目录：
-    - `$SAITEC_CONFIG` 显式指定时，取其父目录
-    - 否则走 `platformdirs` 跨平台默认（Linux/macOS/Windows 用户目录）
+    - `$SSGC_CONFIG` 显式指定时，取其父目录
+    - 否则用 `~/.ssgc`（跨平台统一 home 下的点目录）
     """
-    explicit = os.environ.get("SAITEC_CONFIG")
+    explicit = os.environ.get("SSGC_CONFIG")
     if explicit:
         return Path(explicit).expanduser().resolve().parent
-    return Path(user_data_dir(APP_NAME, appauthor=False))
+    return Path.home() / f".{APP_NAME}"
 
 
 def resolve_config_path() -> Path:

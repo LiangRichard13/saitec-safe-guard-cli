@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from saitec.core.models import Record
-from saitec.recorder.recorder import Recorder
+from ssgc.core.models import Record
+from ssgc.recorder.recorder import Recorder
 
 
 def _make_record(idx: int) -> Record:

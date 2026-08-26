@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from saitec.adapters.openai_responses import OpenAIResponsesAdapter
+from ssgc.adapters.openai_responses import OpenAIResponsesAdapter
 
 
 def test_parse_request_ok() -> None:
