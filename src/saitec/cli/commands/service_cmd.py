@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +12,9 @@ import typer
 
 from .._common import (
     EXIT_USER_ERROR,
+    WARN,
     emit,
+    err_console,
     format_services_block,
     get_config_path,
 )
@@ -30,10 +31,10 @@ _PORT_START = 9001
 
 
 def _emit_warnings(json_output: bool, warnings: list[str]) -> None:
-    """警告走 stderr（人类可读）或并入 data（JSON 模式由调用方拼）"""
+    """警告走 stderr（人类可读黄色图标）或并入 data（JSON 模式由调用方拼）"""
     if not json_output:
         for w in warnings:
-            print(f"警告: {w}", file=sys.stderr)
+            err_console.print(f"{WARN} {w}")
 
 
 def _load_or_emit(path: Path, json_output: bool) -> dict | None:

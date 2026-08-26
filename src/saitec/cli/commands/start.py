@@ -11,11 +11,16 @@ import typer
 from .._common import (
     EXIT_OK,
     EXIT_RUNTIME_ERROR,
+    OK,
+    ROCKET,
     client_env_hint as _client_env_hint,
+    console,
     emit,
     format_services_block,
     get_config_path,
+    get_version,
     is_pid_alive,
+    print_banner,
     read_pid,
     write_pid,
 )
@@ -135,14 +140,13 @@ def start_cmd(
                  "applied_overrides": env_overrides,
              })
     else:
-        print(f"started: True")
-        print(f"pid: {proc.pid}")
-        print(f"config_path: {path}")
-        print()
-        print(format_services_block(services_list))
-        print()
-        print(f"log_file: {path.parent / 'logs' / 'safe-guard.log'}")
+        print_banner(f"{ROCKET} v{get_version()} · pid {proc.pid} · {len(services_list)} 个服务监控中")
+        console.print(f"{OK} 已启动  [dim]pid {proc.pid} · {path}[/dim]")
+        console.print()
+        console.print(format_services_block(services_list))
+        console.print()
+        console.print(f"[dim]日志: {path.parent / 'logs' / 'safe-guard.log'}[/dim]")
         if env_overrides:
-            print(f"applied_overrides: {env_overrides}")
-        print()
-        print("把客户端 base_url 指到上面的本地地址即可开始监控。")
+            console.print(f"[dim]临时覆盖: {env_overrides}[/dim]")
+        console.print()
+        console.print("把客户端 base_url 指到上面的本地地址即可开始监控。")

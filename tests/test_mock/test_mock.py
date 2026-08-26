@@ -29,8 +29,13 @@ import server as mock_server  # noqa: E402
 
 
 @pytest.fixture
-def client() -> TestClient:
-    """重置内存存储，返回 TestClient"""
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """重置内存存储与检测模式，返回 TestClient
+
+    强制 DETECTION_MODE=random：tests/mock_detector/.env 可能配置了 llm 模式
+    （server.py import 时读取），测试需要确定性的 random 行为，不受用户本地 .env 影响。
+    """
+    monkeypatch.setattr(mock_server, "DETECTION_MODE", "random")
     mock_server._records = []  # noqa: SLF001  （重启清空，等价于新起实例）
     with TestClient(mock_server.app) as c:
         yield c
@@ -234,6 +239,10 @@ def test_records_limit(client_with_records: TestClient) -> None:
 def test_llm_mode_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """MOCK_DETECTION_MODE=llm 且无 MOCK_LLM_API_KEY → 启动（import）即退出"""
     import importlib
+
+    # 用户本地 .env 可能已配 llm + key（import 时读取），此时该测试无意义
+    if (_MOCK_DIR / ".env").exists():
+        pytest.skip("tests/mock_detector/.env 存在（含真实配置），跳过 import 校验测试")
 
     monkeypatch.setenv("MOCK_DETECTION_MODE", "llm")
     monkeypatch.delenv("MOCK_LLM_API_KEY", raising=False)

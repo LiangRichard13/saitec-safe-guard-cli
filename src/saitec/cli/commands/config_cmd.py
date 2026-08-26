@@ -10,7 +10,6 @@ import copy
 import json
 import os
 import re
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,7 +19,9 @@ import typer
 from .._common import (
     EXIT_OK,
     EXIT_USER_ERROR,
+    WARN,
     emit,
+    err_console,
     format_errors,
     get_config_path,
 )
@@ -277,7 +278,7 @@ def set_cmd(
         if w:
             warnings.append(w)
             if not json_output:
-                print(f"警告: {w}", file=sys.stderr)
+                err_console.print(f"{WARN} {w}")
 
     result: dict[str, Any] = {"key": key, "value": parsed, "saved": True,
                               "note": "修改已保存。重启后生效（safe-guard restart）"}

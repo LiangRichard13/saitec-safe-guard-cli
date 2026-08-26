@@ -13,9 +13,13 @@ import typer
 from .._common import (
     EXIT_OK,
     EXIT_RUNTIME_ERROR,
+    OK,
+    console,
     emit,
     get_config_path,
+    get_version,
     is_pid_alive,
+    print_banner,
     read_pid,
     remove_pid,
     write_pid,
@@ -87,10 +91,18 @@ def restart_cmd(
         return
     write_pid(path, proc.pid)
 
-    emit(json_output=json_output,
-         data={
-             "restarted": True,
-             "old_pid": old_pid,
-             "new_pid": proc.pid,
-             "config_path": str(path),
-         })
+    if json_output:
+        emit(json_output=True,
+             data={
+                 "restarted": True,
+                 "old_pid": old_pid,
+                 "new_pid": proc.pid,
+                 "config_path": str(path),
+             })
+    else:
+        print_banner(f"🔄 v{get_version()} · 重启完成 · pid {proc.pid}")
+        console.print(
+            f"{OK} 已重启  [dim]旧 pid {old_pid if old_pid else '无'} → 新 pid {proc.pid} · {path}[/dim]"
+        )
+        console.print()
+        console.print("[dim]新配置已生效（如有修改）[/dim]")

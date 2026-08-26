@@ -12,7 +12,11 @@ import typer
 from .._common import (
     EXIT_INTERNAL_ERROR,
     EXIT_USER_ERROR,
+    OK,
+    WARN,
+    console,
     emit,
+    err_console,
     format_services_block,
     get_config_path,
 )
@@ -245,7 +249,7 @@ def init_cmd(
     if w:
         warnings.append(w)
         if not json_output:
-            print(f"警告: {w}", file=sys.stderr)
+            err_console.print(f"{WARN} {w}")
 
     if json_output:
         emit(
@@ -264,16 +268,16 @@ def init_cmd(
             },
         )
     else:
-        print(f"config_path: {path}")
-        print(f"detector_url: {detector_url}")
+        console.print(f"{OK} 配置已生成  [dim]{path}[/dim]")
+        console.print(f"[dim]检测服务器:[/dim] {detector_url}")
+        console.print(f"[dim]生成时间:[/dim] {now_iso8601()}")
         if guessed:
-            print(f"endpoint_type: {endpoint_type}（按 upstream URL 猜测，可用 --endpoint-type 显式指定）")
-        print()
-        print(format_services_block([service]))
-        print()
-        print("下一步:")
-        print("  - 监控更多端点: safe-guard service add <name> --upstream <URL>")
-        print("  - 启动服务:     safe-guard start")
+            console.print(f"[dim]协议格式:[/dim] [cyan]{endpoint_type}[/cyan] [dim]（按 upstream URL 猜测，可用 --endpoint-type 显式指定）[/dim]")
+        console.print()
+        console.print(format_services_block([service]))
+        console.print()
+        console.print("[dim]下一步:[/dim]")
+        console.print(f"  - 监控更多端点: [cyan]safe-guard service add <name> --upstream <URL>[/cyan]")
+        console.print(f"  - 启动服务:     [cyan]safe-guard start[/cyan]")
         if os.name == "nt":
-            print()
-            print("警告: 建议在 Windows 上用 icacls 限制 config.json 权限", file=sys.stderr)
+            err_console.print(f"{WARN} 建议在 Windows 上用 icacls 限制 config.json 权限")

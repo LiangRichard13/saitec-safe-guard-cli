@@ -8,7 +8,17 @@ from pathlib import Path
 
 import typer
 
-from .._common import emit, get_config_path, is_pid_alive, read_pid, EXIT_USER_ERROR
+from .._common import (
+    FAIL,
+    OK,
+    STETHOSCOPE,
+    console,
+    emit,
+    get_config_path,
+    is_pid_alive,
+    read_pid,
+    EXIT_USER_ERROR,
+)
 from ...core.config import load_config_json
 
 
@@ -126,5 +136,22 @@ def doctor(
         })
 
     all_ok = all(c["status"] == "ok" for c in checks)
-    emit(json_output=json_output,
-         data={"all_ok": all_ok, "checks": checks})
+
+    if json_output:
+        emit(json_output=True, data={"all_ok": all_ok, "checks": checks})
+    else:
+        from rich.table import Table
+
+        table = Table(title=f"{STETHOSCOPE} 自检报告", title_style="cyan bold", show_lines=False)
+        table.add_column("检查项", style="dim", no_wrap=True)
+        table.add_column("状态", justify="center", no_wrap=True)
+        table.add_column("详情", overflow="fold")
+        for c in checks:
+            table.add_row(c["name"], OK if c["status"] == "ok" else FAIL, str(c["detail"]))
+        console.print(table)
+        console.print()
+        if all_ok:
+            console.print(f"{OK} 全部检查通过")
+        else:
+            failed = sum(1 for c in checks if c["status"] != "ok")
+            console.print(f"{FAIL} {failed} 项检查失败")

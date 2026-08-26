@@ -285,4 +285,4 @@ def test_format_services_block_variants() -> None:
     assert "http://u2/anthropic" in block
 
     empty = format_services_block([])
-    assert "无服务" in empty
+    assert "无监控服务" in empty

@@ -7,7 +7,12 @@ import typer
 
 from .._common import (
     EXIT_OK,
+    LOG,
+    RUNNING,
+    STOPPED,
+    console,
     emit,
+    format_services_block,
     get_config_path,
     is_pid_alive,
     read_pid,
@@ -56,7 +61,20 @@ def status_cmd(
     if log_file.exists():
         data["last_log"] = _tail(log_file, 10)
 
-    emit(json_output=json_output, data=data)
+    if json_output:
+        emit(json_output=True, data=data)
+    else:
+        if running:
+            console.print(f"{RUNNING} 运行中  [dim]pid {pid} · {path}[/dim]")
+        else:
+            console.print(f"{STOPPED} 未运行  [dim]{path}[/dim]")
+        console.print()
+        console.print(format_services_block(services))
+        if data.get("last_log"):
+            console.print()
+            console.print(f"{LOG} [dim]最近日志:[/dim]")
+            for line in data["last_log"]:
+                console.print(f"[dim]  {line}[/dim]")
 
 
 def _tail(path: Path, n: int) -> list[str]:
