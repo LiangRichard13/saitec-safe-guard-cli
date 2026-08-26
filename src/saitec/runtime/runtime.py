@@ -15,6 +15,8 @@ from typing import Any
 
 import aiohttp
 
+from typing import Callable
+
 from ..adapters import get_adapter
 from ..core.config import (
     apply_cli_overrides,
@@ -48,6 +50,7 @@ class Runtime:
         config: AppConfig,
         sources: ConfigSources,
         data_dir: Path | None = None,
+        event_sink: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> None:
         self._config = config
         self._sources = sources
@@ -56,6 +59,8 @@ class Runtime:
         self._data_dir = data_dir
         self._stopped = True
         self._auth_failed = False
+        # 事件钩子（monitor 命令用）：None 时 no-op；异常绝不杀业务循环
+        self._event_sink = event_sink
 
         self._recorder: Recorder | None = None
         self._reporter: Reporter | None = None
@@ -66,6 +71,15 @@ class Runtime:
         self._report_task: asyncio.Task[None] | None = None
         self._cursor: ReportCursor | None = None
 
+    def _emit_event(self, kind: str, payload: dict[str, Any]) -> None:
+        """向事件钩子（如 monitor）发结构化事件；sink 异常静默吞掉"""
+        if self._event_sink is None:
+            return
+        try:
+            self._event_sink(kind, payload)
+        except Exception:
+            logger.exception("event_sink raised (ignored)")
+
     # ============================================================
     # 工厂方法
     # ============================================================
@@ -73,9 +87,12 @@ class Runtime:
     @staticmethod
     def build_from(
         config_path: Path | None = None,
+        event_sink: Callable[[str, dict[str, Any]], None] | None = None,
         **cli_overrides: Any,
     ) -> "Runtime":
         """工厂方法：三级加载 + 校验 + 构造 Runtime（不启动 IO）
+
+        event_sink：可选事件钩子（monitor 用），不参与配置覆盖。
 
         Raises:
             FileNotFoundError: config.json 不存在
@@ -87,7 +104,7 @@ class Runtime:
         config_path = Path(config_path).expanduser().resolve()
         config, sources = load_config_with_overrides(config_path, **cli_overrides)
         # 数据目录跟随 config 所在目录（P0-7）
-        return Runtime(config, sources, data_dir=config_path.parent)
+        return Runtime(config, sources, data_dir=config_path.parent, event_sink=event_sink)
 
     # ============================================================
     # 生命周期
@@ -118,11 +135,12 @@ class Runtime:
             self._http_session = aiohttp.ClientSession()
             self._reporter = Reporter(self._config.detector, self._http_session)
 
-            # 4. ProxyService（每个 service 一个）
+            # 4. ProxyService（每个 service 一个；透传事件钩子给 monitor）
             for spec in self._config.services:
                 adapter = get_adapter(spec.endpoint_type)
                 proxy = ProxyService(
-                    spec, adapter, self._recorder, self._http_session
+                    spec, adapter, self._recorder, self._http_session,
+                    event_sink=self._emit_event,
                 )
                 await proxy.start()
                 self._proxies.append(proxy)
@@ -138,6 +156,14 @@ class Runtime:
                 len(self._proxies),
                 self._config.detector.url,
             )
+            self._emit_event("started", {
+                "services": [
+                    {"name": p._spec.name, "port": p._actual_port,  # noqa: SLF001
+                     "upstream": p._spec.upstream, "endpoint_type": p._spec.endpoint_type}  # noqa: SLF001
+                    for p in self._proxies
+                ],
+                "detector_url": self._config.detector.url,
+            })
         except Exception:
             # 启动失败：清理已分配资源
             await self._cleanup_partial()
@@ -167,6 +193,7 @@ class Runtime:
             await self._http_session.close()
             self._http_session = None
         logger.info("runtime stopped")
+        self._emit_event("stopped", {"auth_failed": self._auth_failed})
 
     async def _cleanup_partial(self) -> None:
         """start() 中途失败时的清理"""
@@ -239,16 +266,28 @@ class Runtime:
                 await self._store.save_results(results)  # type: ignore[union-attr]
                 # 游标推进到成功批末尾
                 await self._store.advance_cursor(self._make_cursor(pending[-1]))
+                flagged = [r for r in results
+                           if r.detection_status in ("violation", "suspicious", "error")]
+                self._emit_event("report", {
+                    "total": len(results),
+                    "flagged": [
+                        {"record_id": r.record_id, "detection_status": r.detection_status,
+                         "risk_level": r.risk_level,
+                         "reason": (r.detection_detail or {}).get("reason", "")}
+                        for r in flagged
+                    ],
+                })
                 pending.clear()
                 backoff = 1
             except ReportError as e:
                 if e.kind == ReportErrorKind.AUTH:
                     self._auth_failed = True
-                    # 把 reporter 的具体原因（含 URL / 排查建议）带出来
+                    self._emit_event("auth_failed", {"message": e.message})
                     logger.error(
                         "X-API-Key 失效，停止上报：%s", e.message
                     )
                     return
+                self._emit_event("report_error", {"kind": e.kind.value, "message": e.message})
                 logger.warning(
                     "report failed (kind=%s): %s; %d 条记录保留待重试; backoff=%ds",
                     e.kind, e.message, len(pending), min(60, 2 ** backoff),
@@ -257,6 +296,7 @@ class Runtime:
             except Exception as e:
                 # P0-5：任何意外异常（SQLite locked / store 故障等）兜底，
                 # 不杀死后台循环
+                self._emit_event("report_error", {"kind": "UNEXPECTED", "message": str(e)})
                 logger.exception(
                     "report loop unexpected error; %d 条记录保留待重试",
                     len(pending),

@@ -588,6 +588,27 @@ def test_tail_no_records(ready_config: Path) -> None:
 
 
 # ============================================================
+# monitor 命令（不阻塞的路径：互斥检查/参数校验）
+# ============================================================
+
+
+def test_monitor_already_running(ready_config: Path) -> None:
+    """已有运行实例时 monitor 应拒绝（前台独占）"""
+    from saitec.cli._common import write_pid
+
+    write_pid(ready_config / "config.json", os.getpid())  # 伪造当前进程为运行中
+    result = runner.invoke(app, ["monitor"])
+    assert result.exit_code == 2
+    assert "已在运行" in result.stderr
+
+
+def test_monitor_config_not_found(isolated: Path) -> None:
+    result = runner.invoke(app, ["monitor"])
+    assert result.exit_code == 2
+    assert "不存在" in result.stderr
+
+
+# ============================================================
 # 日志按日期切割 + purge 清理日志
 # ============================================================
 

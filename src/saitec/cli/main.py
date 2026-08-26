@@ -11,7 +11,7 @@ from pathlib import Path
 
 import typer
 
-from .commands import config_cmd, doctor, init, logs, purge, redo, report, restart, service_cmd, start, status, stop, tail, validate
+from .commands import config_cmd, doctor, init, logs, monitor, purge, redo, report, restart, service_cmd, start, status, stop, tail, validate
 
 
 def _configure_io_encoding() -> None:
@@ -68,6 +68,7 @@ def main(
 # 注册顶层命令
 app.command(name="init")(init.init_cmd)
 app.command(name="start")(start.start_cmd)
+app.command(name="monitor")(monitor.monitor_cmd)
 app.command(name="stop")(stop.stop_cmd)
 app.command(name="restart")(restart.restart_cmd)
 app.command(name="status")(status.status_cmd)

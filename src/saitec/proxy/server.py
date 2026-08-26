@@ -40,6 +40,7 @@ class ProxyService:
         http_client: aiohttp.ClientSession,
         upstream_timeout_sec: float = 60.0,
         max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
+        event_sink: Any | None = None,
     ) -> None:
         self._spec = spec
         self._adapter = adapter
@@ -47,6 +48,8 @@ class ProxyService:
         self._http_client = http_client
         self._upstream_timeout = aiohttp.ClientTimeout(total=upstream_timeout_sec)
         self._max_body_bytes = max_body_bytes
+        # 事件钩子（Runtime 注入，monitor 用）：None 时无事件
+        self._event_sink = event_sink
 
         self._app = web.Application()
         self._app.router.add_route("*", "/{path:.*}", self._handle)
@@ -269,3 +272,15 @@ class ProxyService:
             self._recorder.enqueue(record)
         except Exception:
             logger.exception("recorder.enqueue failed")
+        # 流量事件（monitor 实时输出用）
+        if self._event_sink is not None:
+            try:
+                self._event_sink("traffic", {
+                    "service": self._spec.name,
+                    "path": path,
+                    "status_code": status_code,
+                    "elapsed_ms": elapsed_ms,
+                    "error": error,
+                })
+            except Exception:
+                pass  # 监控输出异常不影响代理转发

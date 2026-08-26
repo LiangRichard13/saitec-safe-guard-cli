@@ -275,6 +275,25 @@ SAITEC_REPORT_INTERVAL=5 safe-guard start  # 等价：env 覆盖
 
 **PID 文件** 写入 `safe-guard.pid`（在 config 所在目录）。
 
+#### `monitor` — 前台实时监控（人盯场景）
+
+```bash
+safe-guard monitor                     # 前台起服务 + 终端实时输出
+safe-guard monitor --report-interval 5 # 缩短上报周期（violation 更快显示）
+```
+
+一个进程既是服务又是实时面板：正常流量灰色单行简报，**异常彩色醒目**（violation 红色含 reason、上报失败黄色、AUTH 停摆红色）。`Ctrl+C` 或 `safe-guard stop` 优雅退出，退出时打印会话总结（流量数/需关注数/上报失败数）。
+
+与其它监控手段的分工：
+
+| 手段 | 适合 | 形态 |
+|------|------|------|
+| `monitor` | **人**实时值守盯异常 | 前台进程，事件驱动实时输出 |
+| `logs --follow` | 看原始日志流 | 前台 tail（无语义、violation 不高亮） |
+| Agent 心跳定时任务 | **Agent** 周期巡检汇报 | 宿主调度（cron/Monitor），查 status/report JSON |
+
+注意：violation 结论来自检测服务器，显示滞后一个上报周期（默认 60s，可 `--report-interval` 调小）；monitor 与 `start` 互斥（同一配置同时只能一个）。
+
 #### `stop` — 优雅停止
 
 ```bash

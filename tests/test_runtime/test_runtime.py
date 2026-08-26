@@ -451,6 +451,91 @@ async def test_report_loop_survives_unexpected_exception(config_dir: Path) -> No
 
 
 # ============================================================
+# 事件钩子（monitor 用）
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_event_sink_traffic_and_report(config_dir: Path, mock_detector_server: tuple) -> None:
+    """event_sink 收到 traffic（代理流量）与 report（上报结果）事件"""
+    detector_url, _ = mock_detector_server
+    cfg_path = config_dir / "config.json"
+    cfg = json.loads(cfg_path.read_text())
+    cfg["detector"]["url"] = detector_url
+    cfg["detector"]["report_interval_sec"] = 1
+    cfg_path.write_text(json.dumps(cfg))
+
+    events: list[tuple[str, dict]] = []
+    runtime = Runtime.build_from(event_sink=lambda k, p: events.append((k, p)))
+    await runtime.start()
+    try:
+        proxy_port = runtime._proxies[0]._actual_port  # noqa: SLF001
+        async with aiohttp.ClientSession() as session:
+            await session.post(
+                f"http://127.0.0.1:{proxy_port}/v1/chat/completions",
+                json={"model": "gpt-4o", "messages": []},
+            )
+        await asyncio.sleep(2.5)  # 等 1s 上报周期
+
+        kinds = [k for k, _ in events]
+        assert "started" in kinds
+        assert "traffic" in kinds
+        assert "report" in kinds
+        traffic = next(p for k, p in events if k == "traffic")
+        assert traffic["service"] == "svc-a"
+        assert traffic["status_code"] in (200, 502)  # mock 上游不存在，两种都算流量事件
+        rep = next(p for k, p in events if k == "report")
+        assert rep["total"] >= 1
+        assert isinstance(rep["flagged"], list)
+    finally:
+        await runtime.stop()
+    assert "stopped" in [k for k, _ in events]
+
+
+@pytest.mark.asyncio
+async def test_event_sink_auth_failed(config_dir: Path) -> None:
+    """detector 401 → auth_failed 事件"""
+    from aiohttp import web
+
+    async def handle_401(request: web.Request) -> web.Response:
+        return web.Response(status=401, text="unauthorized")
+
+    app = web.Application()
+    app.router.add_post("/detect", handle_401)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    try:
+        cfg_path = config_dir / "config.json"
+        cfg = json.loads(cfg_path.read_text())
+        cfg["detector"]["url"] = f"http://127.0.0.1:{port}"
+        cfg["detector"]["report_interval_sec"] = 1
+        cfg_path.write_text(json.dumps(cfg))
+
+        events: list[tuple[str, dict]] = []
+        runtime = Runtime.build_from(event_sink=lambda k, p: events.append((k, p)))
+        await runtime.start()
+        try:
+            proxy_port = runtime._proxies[0]._actual_port  # noqa: SLF001
+            async with aiohttp.ClientSession() as session:
+                await session.post(
+                    f"http://127.0.0.1:{proxy_port}/v1/chat/completions",
+                    json={"model": "gpt-4o", "messages": []},
+                )
+            await asyncio.sleep(3)
+
+            assert "auth_failed" in [k for k, _ in events]
+            payload = next(p for k, p in events if k == "auth_failed")
+            assert "message" in payload
+        finally:
+            await runtime.stop()
+    finally:
+        await runner.cleanup()
+
+
+# ============================================================
 # pending 队列不清空时不取新批（防内存无界增长）
 # ============================================================
 

@@ -38,6 +38,7 @@ description: 操作 saitec safe-guard CLI（safe-guard 命令）——大模型 
 # 生命周期
 safe-guard init --api-key KEY --detector-url URL --upstream URL [--endpoint-type T] [--name N] [--port P] [--force]
 safe-guard start [--report-interval N] [--batch-size N]   # 后台子进程 + PID 文件
+safe-guard monitor [--report-interval N]                  # 前台实时监控（人盯）：异常彩色输出，Ctrl+C 退出
 safe-guard stop [--timeout N]
 safe-guard restart
 safe-guard status --json        # running/pid/services/最近日志
@@ -114,6 +115,7 @@ safe-guard status --json && safe-guard report --since 10m --limit 500 --json
 - 汇报优先级：服务掉线 > violation（含 `detail.reason`）> `detection_status=error`（detector 自身故障）
 - **盲区兜底**：detector 401 后 CLI 故意停摆，此时 `running=true` 且 report 无 error——健康巡检时可加 `safe-guard logs --tail 50` 检查有无 `X-API-Key 失效`
 - 周期建议 ≥ detector 的 `report_interval_sec`（默认 60s），否则看到的总是旧数据；持久的宿主级定时任务用 Claude Code 的 cron/Monitor 机制做，本 CLI 自身不提供调度
+- 人盯实时场景用 `safe-guard monitor`（前台进程 + 事件驱动彩色输出，与 start 互斥）——它给人类看，Agent 巡检仍用上面的 JSON 组合
 
 ### 5. 排错决策树
 
