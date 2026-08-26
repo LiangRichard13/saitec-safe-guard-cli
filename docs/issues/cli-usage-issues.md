@@ -12,6 +12,7 @@
 | 6 | P2 | reporter/reporter.py + runtime/runtime.py | AUTH 失败时报 "X-API-Key 失效，停止上报：请重新 init" 但未告知用户预期值和来源 | reporter 抛 ReportError 后 runtime 直接覆盖了原 message；message 也不包含 URL / 排查建议 | **已修**：(a) reporter 的 AUTH message 加上 `{url}` + init 命令建议；(b) runtime 的 `_report_loop` 和 `_replay_unreported` 都用 `logger.error("X-API-Key 失效，停止上报：%s", e.message)` 透传 |
 | 7 | P2 | cli/commands/init.py | api_key 任意字符串直接写入，未做基础格式校验（如非空、最小长度） | 容易拼写错后上线发现 401 | **已修**：init 校验 api_key 长度 ≥8 + detector_url 以 http/https 开头，否则 exit 1 + 中文错误信息 |
 | 8 | P3 | cli/commands/init.py | Windows 下 config.json 默认继承父目录权限，其他用户可读 | `_set_file_private` 在 Windows 上直接 `return`（要求管理员），仅给用户文字 warning | **未修**：自动 icacls 需要管理员权限或脚本提权，普通 init 不能做；保留 warning 提示手动 |
+| 9 | P0 | proxy/server.py | 客户端（openai SDK）全部报 `Connection error.`（每条 ~6s，SDK 内部重试 2 次）；但代理侧 monitor/JSONL 全 200 且内容完整 | 上游（DeepSeek 等）gzip 压缩响应，aiohttp `ClientSession(auto_decompress=True)` 已解压 body，但 `Content-Encoding: gzip` 头被原样透传——客户端按 gzip 解码明文失败。本地不压缩的上游不触发，换压缩上游才暴露 | **已修**（2026-08-26）：响应头剥离集合加 `content-encoding`（非流式与 SSE 两处，提取 `_STRIP_RESPONSE_HEADERS` 常量）；回归测试 `test_proxy_strips_content_encoding_from_gzip_upstream` 等 2 例 |
 
 ## 修复原则
 

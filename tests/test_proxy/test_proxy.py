@@ -304,6 +304,169 @@ async def test_proxy_non_stream_response(
 
 
 # ============================================================
+# gzip 上游：Content-Encoding 头剥离
+# ============================================================
+
+import gzip
+
+
+@pytest_asyncio.fixture
+async def upstream_gzip_json() -> str:
+    """Mock 上游：返回 gzip 压缩 JSON + Content-Encoding: gzip（模拟 DeepSeek 等压缩上游）"""
+
+    async def handle(request: web.Request) -> web.Response:
+        await request.read()
+        payload = json.dumps(
+            {
+                "choices": [
+                    {"message": {"role": "assistant", "content": "Hello"}, "finish_reason": "stop"}
+                ],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 2},
+            }
+        ).encode()
+        return web.Response(
+            status=200,
+            body=gzip.compress(payload),
+            headers={"Content-Type": "application/json", "Content-Encoding": "gzip"},
+        )
+
+    app = web.Application()
+    app.router.add_post("/v1/chat/completions", handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    yield f"http://127.0.0.1:{port}"
+    await runner.cleanup()
+
+
+@pytest_asyncio.fixture
+async def running_proxy_gzip(
+    upstream_gzip_json: str,
+    client_session: aiohttp.ClientSession,
+    tmp_path,
+) -> tuple[ProxyService, Recorder, str]:
+    spec = EndpointSpec(
+        name="gzip-svc",
+        port=0,
+        upstream=upstream_gzip_json,
+        endpoint_type="openai-chat-completions",
+        record_body=True,
+    )
+    adapter = get_adapter("openai-chat-completions")
+    recorder = Recorder(tmp_path, batch_size=100)
+    proxy = ProxyService(spec, adapter, recorder, client_session)
+    await proxy.start()
+    site = proxy._site  # noqa: SLF001
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    try:
+        yield proxy, recorder, f"http://127.0.0.1:{port}"
+    finally:
+        await proxy.stop()
+
+
+async def test_proxy_strips_content_encoding_from_gzip_upstream(
+    running_proxy_gzip: tuple,
+) -> None:
+    """上游 gzip 压缩时，代理不得透传 Content-Encoding 头
+
+    实际故障（2026-08-26 DeepSeek 联调）：aiohttp ClientSession 默认
+    auto_decompress=True 已把 body 解压成明文，但 Content-Encoding: gzip
+    头被原样透传 → 客户端（openai SDK/httpx）按 gzip 解码明文 →
+    "Connection error." 并重试 2 次（代理侧全 200）。
+    """
+    proxy, recorder, local_url = running_proxy_gzip
+
+    request_body = json.dumps(
+        {"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]}
+    ).encode()
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{local_url}/v1/chat/completions",
+            data=request_body,
+            headers={"Content-Type": "application/json"},
+        ) as resp:
+            assert resp.status == 200
+            # 核心断言：body 已解压，头必须剥离（修复前此行失败）
+            assert "Content-Encoding" not in resp.headers
+            # 客户端视角：能正常读到明文 JSON
+            data = await resp.json()
+            assert data["choices"][0]["message"]["content"] == "Hello"
+
+    batch = await recorder.flush()
+    assert len(batch) == 1
+    assert batch[0].status_code == 200
+    assert batch[0].error is None
+
+
+@pytest_asyncio.fixture
+async def upstream_gzip_sse() -> str:
+    """Mock 上游：gzip 压缩的 text/event-stream（少数上游对 SSE 也压缩）"""
+
+    async def handle(request: web.Request) -> web.Response:
+        await request.read()
+        payload = (
+            b'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'
+            b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'
+            b"data: [DONE]\n\n"
+        )
+        return web.Response(
+            status=200,
+            body=gzip.compress(payload),
+            headers={"Content-Type": "text/event-stream", "Content-Encoding": "gzip"},
+        )
+
+    app = web.Application()
+    app.router.add_post("/v1/chat/completions", handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    yield f"http://127.0.0.1:{port}"
+    await runner.cleanup()
+
+
+async def test_proxy_sse_strips_content_encoding(
+    upstream_gzip_sse: str,
+    client_session: aiohttp.ClientSession,
+    tmp_path,
+) -> None:
+    """SSE 分支同样不得透传 Content-Encoding（与非流式共用剥离集合）"""
+    spec = EndpointSpec(
+        name="gzip-sse-svc",
+        port=0,
+        upstream=upstream_gzip_sse,
+        endpoint_type="openai-chat-completions",
+        record_body=True,
+    )
+    adapter = get_adapter("openai-chat-completions")
+    recorder = Recorder(tmp_path, batch_size=100)
+    proxy = ProxyService(spec, adapter, recorder, client_session)
+    await proxy.start()
+    site = proxy._site  # noqa: SLF001
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"http://127.0.0.1:{port}/v1/chat/completions",
+                data=json.dumps(
+                    {"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}], "stream": True}
+                ).encode(),
+                headers={"Content-Type": "application/json"},
+            ) as resp:
+                assert resp.status == 200
+                assert "Content-Encoding" not in resp.headers
+                body = await resp.text()
+                assert "Hello" in body
+                assert "[DONE]" in body
+    finally:
+        await proxy.stop()
+
+
+# ============================================================
 # 生命周期
 # ============================================================
 

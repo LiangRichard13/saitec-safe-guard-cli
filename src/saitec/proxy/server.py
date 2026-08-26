@@ -28,6 +28,16 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_BODY_BYTES = 100 * 1024 * 1024  # 100MB
 
+# 响应头剥离集合：这些头描述的是上游 body 的传输表示，而代理已改变 body
+# （读入内存 / 重新分块 / ClientSession 默认 auto_decompress 已解压），
+# 透传会导致客户端解码失败——实测 DeepSeek 上游 gzip 压缩时，透传
+# Content-Encoding 会让 openai SDK 按 gzip 解码明文，报 Connection error.
+_STRIP_RESPONSE_HEADERS = frozenset({
+    "content-length",
+    "transfer-encoding",
+    "content-encoding",
+})
+
 
 class ProxyService:
     """单个反向代理服务实例（对应一个本地端口 + 一个上游）"""
@@ -168,7 +178,7 @@ class ProxyService:
                 headers={
                     k: v
                     for k, v in upstream_resp.headers.items()
-                    if k.lower() not in ("content-length", "transfer-encoding")
+                    if k.lower() not in _STRIP_RESPONSE_HEADERS
                 },
             )
             await response.prepare(request)
@@ -224,7 +234,7 @@ class ProxyService:
             headers={
                 k: v
                 for k, v in upstream_resp.headers.items()
-                if k.lower() not in ("content-length", "transfer-encoding")
+                if k.lower() not in _STRIP_RESPONSE_HEADERS
             },
         )
         self._submit(

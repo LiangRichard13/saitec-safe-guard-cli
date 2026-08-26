@@ -123,7 +123,8 @@ safe-guard status --json && safe-guard report --since 10m --limit 500 --json
 2. `status` 未运行但怀疑有残留 —— 直接 `start`：CLI 对死 PID 自动覆盖（stop 也自带 STALE_PID 自愈清理）。真正报 `ALREADY_RUNNING` 说明 PID 确实活着，是另一个实例在跑（可能用了不同 SAITEC_CONFIG），先找到它再决定停谁
 3. 日志出现 `X-API-Key 失效` → detector 的 api_key 不匹配，重 `init --force` 或 `config set detector.api_key`
 4. `report` 空结果 → 时间窗口不对（扩大 `--since`）或上报周期未到（等 60s）
-5. 更细排错（SQLite 损坏/GBK 乱码/续传机制）见 [references/operations.md](references/operations.md)
+5. 客户端报 `Connection error.` 但代理侧 200 → 修复前版本的 gzip 响应头透传问题（2026-08-26 已修），`restart` 加载新代码
+6. 更细排错（SQLite 损坏/GBK 乱码/续传机制）见 [references/operations.md](references/operations.md)
 
 ## 关键陷阱汇总
 
@@ -133,6 +134,7 @@ safe-guard status --json && safe-guard report --since 10m --limit 500 --json
 | Git Bash 把 `/detect` 等参数转成 Windows 路径 | 命令前缀 `MSYS_NO_PATHCONV=1` |
 | detector 401 后上报停摆 | 日志会写明；重配 key 后 `restart` 恢复 |
 | 改配置没生效 | `restart` |
+| 客户端 `Connection error.` 但代理侧 200（同一请求 JSONL 出现 3 次 = SDK 重试） | 修复前版本透传了上游 `Content-Encoding: gzip` 头但 body 已解压（2026-08-26 已修）；`restart` 加载新代码即可 |
 | 监控需要真实模型 key | safe-guard 不做鉴权，`Authorization` 头由客户端自带透传；测试用 mock（见 references） |
 
 ## 深入阅读
