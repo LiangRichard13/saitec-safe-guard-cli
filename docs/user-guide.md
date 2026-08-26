@@ -702,14 +702,6 @@ safe-guard restart
 # 重新发请求触发上报，会自动建新 results.db
 ```
 
-### 7.9 客户端报 Connection error，但代理侧全是 200
-
-**症状**：客户端（openai SDK 等）请求全部失败报 `Connection error.`，每条耗时 5-6 秒（内部重试）；但 `monitor` / `report` 显示代理转发全部 200、记录内容完整，同一请求在 JSONL 里出现 3 次（SDK 重试 2 次）。
-
-**根因**：上游（如 DeepSeek）对 JSON 响应做 gzip 压缩；代理的 HTTP 客户端已自动解压 body，但早期版本把 `Content-Encoding: gzip` 响应头原样透传——客户端按 gzip 解码明文失败。本地不压缩的上游（如 localhost 模型）不会触发，换到压缩上游才暴露。
-
-**修复**：已修复（2026-08-26，响应头剥离 `content-encoding`）。若仍出现说明跑的是修复前的进程——`safe-guard restart` 加载新代码；源码安装升级到最新 master。
-
 ---
 
 ## 8. 安全注意事项

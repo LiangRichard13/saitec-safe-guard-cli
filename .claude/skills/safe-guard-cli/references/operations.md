@@ -57,9 +57,6 @@ netstat -ano | grep ":9001" | grep LISTENING    # 拿 PID
 tasklist //FI "PID eq <pid>"                     # Windows 看进程名
 ```
 
-### 客户端报 Connection error 但代理侧 200
-典型指纹：客户端（openai SDK）每条 ~5-6s 失败且 JSONL 里同一请求出现 3 次（SDK 重试 2 次），但记录全 200、response.content 完整。根因是修复前版本（2026-08-26 之前）把上游 `Content-Encoding: gzip` 头透传而 body 已被代理解压，客户端按 gzip 解码明文失败——压缩上游（DeepSeek 等云端）触发，本地不压缩上游不触发。修复已进 master：`safe-guard restart` 加载新代码即恢复。
-
 ---
 
 ## 2. mock detector 联调

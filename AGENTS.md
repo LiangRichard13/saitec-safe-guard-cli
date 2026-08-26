@@ -74,8 +74,11 @@ docs/
 | 新命令/新参数 | 命令速查表 + 命令计数 | §4 对应命令小节 | 命令速查 + 相关 recipe | — |
 | 契约/上报行为变化 | — | — | — | 对应章节 |
 | 架构/分层调整 | 项目结构节 | — | — | —（改 AGENTS.md §2/§3 + design/architecture.md） |
-| 排错/行为语义变化 | — | §7 排错手册 | 排错决策树 + references/operations.md | FAQ |
+| CLI 操作行为变化（用户可感知） | — | §7 排错手册 | 排错决策树 + references/operations.md | FAQ |
+| bug 修复（操作行为不变） | — | **不更新** | **不更新** | — |
 | 配置新字段 | — | §5 配置表 + env var 列表 | 配置相关段落 | （detector 字段时）请求格式 |
+
+> **原则**：已修复的 bug 用户不会再遇到，不写排错条目教用户排一个不存在的错。bug 修复记录进 `docs/issues/cli-usage-issues.md` 与 PROGRESS.md 即可；user-guide / SKILL 只在**CLI 操作行为变化**（命令语义、参数、输出、需用户动手的差异）时更新。
 
 ## 5. PROGRESS.md 约定
 
