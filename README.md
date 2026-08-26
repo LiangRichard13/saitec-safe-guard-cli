@@ -67,7 +67,7 @@ pip install -e ".[dev]"
 
 ## 设计文档
 
-详细设计见 `docs/design/`：
+实现原理通俗导览见 [`docs/how-it-works.md`](docs/how-it-works.md)（数据流/六层架构/关键机制/设计取舍）。详细设计见 `docs/design/`：
 
 - `saitec-safe-guard-cli-design.md` — 总体设计
 - `architecture.md` — 6 层架构与代码组织

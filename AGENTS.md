@@ -36,6 +36,7 @@ tests/                       # 镜像 src 分层
 
 docs/
 ├── user-guide.md            # 人类用户手册（命令/配置/排错/安全）
+├── how-it-works.md          # 实现原理通俗导览（数据流/六层/关键机制/设计取舍）
 ├── design/                  # design.md(总体) architecture.md(六层) data-model.md(SQLite+JSONL)
 ├── integration/detector-api.md  # 检测服务器对接契约（含去重实现建议）
 └── issues/cli-usage-issues.md   # 历史问题清单
