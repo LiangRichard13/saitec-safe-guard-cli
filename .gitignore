@@ -49,3 +49,5 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+# Secrets（密钥，绝不提交）
+.env
