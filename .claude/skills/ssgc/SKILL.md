@@ -1,5 +1,5 @@
 ---
-name: ssgc-cli
+name: ssgc
 description: 操作 saitec-safe-guard-cli（命令名 ssgc）——大模型 API 流量的反向代理监控工具。当用户提到 ssgc、监控 LLM API 调用、把 Claude Code/Codex/脚本的请求代理到本地端口、上报流量到安全检测服务器、查检测结果（violation/clean）、或要求配置/启停/排错这个工具时，使用本 skill。含初始化、服务增删改、启停、检测查询、定时心跳监控、排错的完整操作方法。
 ---
 

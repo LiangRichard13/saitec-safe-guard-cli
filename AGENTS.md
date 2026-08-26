@@ -1,6 +1,6 @@
 # AGENTS.md — 项目记忆（开发约定）
 
-> **分工**：开发约定看本文档；项目进度看 [PROGRESS.md](PROGRESS.md)（按需读取）；CLI 使用方法看 `.claude/skills/ssgc-cli/SKILL.md` 与 `docs/user-guide.md`；检测服务器对接看 `docs/integration/detector-api.md`。本文档不重复它们的内容。
+> **分工**：开发约定看本文档；项目进度看 [PROGRESS.md](PROGRESS.md)（按需读取）；CLI 使用方法看 `.claude/skills/ssgc/SKILL.md` 与 `docs/user-guide.md`；检测服务器对接看 `docs/integration/detector-api.md`。本文档不重复它们的内容。
 >
 > **Claude Code 桥接**：本项目约定统一写在 AGENTS.md（跨工具标准）。Claude Code 不自动读它——本地建一个 `CLAUDE.md` 内容仅一行 `@AGENTS.md` 即可（import 语法，已 gitignore 不入库）。
 
@@ -40,7 +40,7 @@ docs/
 ├── integration/detector-api.md  # 检测服务器对接契约（含去重实现建议）
 └── issues/cli-usage-issues.md   # 历史问题清单
 
-.claude/skills/ssgc-cli/  # 教 Agent 操作本 CLI 的 skill（SKILL.md + references + evals）
+.claude/skills/ssgc/  # 教 Agent 操作本 CLI 的 skill（SKILL.md + references + evals）
 ```
 
 ## 3. 分层原则（维护扩展的铁律）
