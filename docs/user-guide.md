@@ -73,7 +73,7 @@ pip install -e ".[mock,dev]"
 
 ```bash
 safe-guard --help
-# 应输出 Usage 和 13 个命令列表
+# 应输出 Usage 和 14 个命令列表
 ```
 
 ---
@@ -182,7 +182,7 @@ safe-guard stop
 
 ## 4. 完整命令参考
 
-> 13 个命令分 5 类。所有命令都支持 `--config <path>`（自定义配置文件）和 `--json`（机器可读 JSON 输出）。
+> 14 个命令分 5 类。所有命令都支持 `--config <path>`（自定义配置文件）和 `--json`（机器可读 JSON 输出；`monitor` 除外）。
 
 ### 4.1 配置类
 

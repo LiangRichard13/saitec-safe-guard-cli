@@ -29,7 +29,7 @@ safe-guard start
 
 ## 状态
 
-**v0.1.0 — 初版交付水平**。13 个命令全部可用；端到端链路（init→start→发请求→JSONL→上报→SQLite→report→stop）在 mock detector 与真实 detector 上验证过；198 个 pytest 全绿。
+**v0.1.0 — 初版交付水平**。14 个命令全部可用；端到端链路（init→start→monitor→发请求→JSONL→上报→SQLite→report→stop）在 mock detector 上验证过；232 个 pytest 全绿。
 
 已修复的鲁棒性问题（端到端联调发现）见 [`docs/issues/cli-usage-issues.md`](docs/issues/cli-usage-issues.md)。
 
@@ -38,11 +38,11 @@ safe-guard start
 | 类别 | 命令 |
 |---|---|
 | 配置 | `init` · `validate` · `config get/set/unset/list` · `service add/remove/set/list` |
-| 生命周期 | `start` · `stop` · `restart` · `status` · `logs` |
+| 生命周期 | `start` · `monitor` · `stop` · `restart` · `status` · `logs` |
 | 运维 | `report` · `redo` · `purge` |
 | 调试 | `doctor` · `tail` |
 
-每个命令都支持 `--json` 输出（Agent 友好）和 `--config <path>`（自定义配置文件位置）。
+每个命令都支持 `--json` 输出（Agent 友好，`monitor` 除外——它是给人看的实时流）和 `--config <path>`（自定义配置文件位置）。`safe-guard monitor` 为前台实时监控：正常流量灰色简报、violation/上报失败彩色醒目，适合安全值守场景。
 
 ## 安装选项
 
