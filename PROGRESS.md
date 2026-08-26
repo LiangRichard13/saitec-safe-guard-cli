@@ -5,8 +5,15 @@
 
 ## 2026-08-26
 
+### test: service list 断言剥 ANSI（FORCE_COLOR 环境 flaky） <de296c3>
+Claude Code/CI 会话注入 FORCE_COLOR 时 rich 对 CliRunner 非 TTY 输出也着色并把 URL 拆成多段 SGR，纯文本断言匹配不上。断言前统一 `_plain()` 剥 ANSI。
+教训: 富文本 CLI 的输出断言一律先剥 ANSI 再比——环境注入的 FORCE_COLOR 会让"非 TTY 无色"的假设失效；FORCE_COLOR 的优先级高于 NO_COLOR。
+
+### chore: 清理 platformdirs 文案残留 <f382658>
+重命名提交漏改 help/docstring 里的 3 处 platformdirs 描述（依赖已删）。
+
 ### refactor: 品牌统一 SSGC——包名/命令/路径/文档全量重命名 <9b0d301>
-命名体系定稿：正式名 `saitec-safe-guard-cli`（repo/PyPI 不变），代码内一律 `ssgc`（src 目录/import/CLI 命令/环境变量 SSGC_CONFIG），品牌 SSGC，数据目录 `~/.ssgc`（弃 platformdirs，删依赖），日志/PID/stop flag 改 `ssgc.*`，banner 换 SSGC，skill 目录改名 `.claude/skills/ssgc`。不保留旧名兼容（无 safe-guard 别名、不回退 SAITEC_CONFIG）。保留：conda 环境名 saitec-guard、GitHub URL、作者 SaITec、本文件历史条目。本机数据迁移（AppData/Local/saitec → ~/.ssgc）与 conda 重装随后执行。
+命名体系定稿：正式名 `saitec-safe-guard-cli`（repo/PyPI 不变），代码内一律 `ssgc`（src 目录/import/CLI 命令/环境变量 SSGC_CONFIG），品牌 SSGC，数据目录 `~/.ssgc`（弃 platformdirs，删依赖），日志/PID/stop flag 改 `ssgc.*`，banner 换 SSGC，skill 目录改名 `.claude/skills/ssgc`。不保留旧名兼容（无 safe-guard 别名、不回退 SAITEC_CONFIG）。保留：conda 环境名 saitec-guard、GitHub URL、作者 SaITec、本文件历史条目。本机已完成：conda 重装（ssgc.exe 替换 safe-guard.exe）、数据迁移至 ~/.ssgc（复制→全链路验证→删旧目录）、心跳脚本 exe 路径同步。
 教训: 全局替换 `safe-guard` 前必须先用占位符保护 `saitec-safe-guard-cli`（PyPI/repo 名是其超集，会误伤）；`patch("saitec.xxx")` 这类字符串模块路径不被 `from saitec`/`import saitec` 两条 sed 规则覆盖，残留检查必须独立跑。
 
 ### docs: 文档矩阵收紧——bug 修复不更新 user-guide/SKILL <208e5cf>
