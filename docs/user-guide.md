@@ -738,22 +738,20 @@ safe-guard restart
 # 安装 mock 依赖
 pip install "saitec-safe-guard-cli[mock]"
 
-# 起 mock detector（端口 8000，按 5% 概率标 violation）
+# random 模式（默认）：按 5% 概率随机标 violation
 uvicorn server:app --app-dir tests/mock_detector --host 127.0.0.1 --port 8000
-```
 
-**接入 safe-guard**：
-
-```bash
-safe-guard init --api-key "mock-test-key" --detector-url "http://127.0.0.1:8000"
-safe-guard start
+# llm 模式：真实大模型判断内容是否安全（在 tests/mock_detector/.env 配 key）
+MOCK_DETECTION_MODE=llm uvicorn server:app --app-dir tests/mock_detector --host 127.0.0.1 --port 8000
 ```
 
 mock 提供：
-- `POST /detect` — 接收上报，按概率返回 `clean/violation`
+- `POST /detect` — 接收上报，`random` 模式按概率返回、`llm` 模式逐条调模型判定（失败降级为 `error` 结论，不阻断）
 - `GET /records` — 查询已处理记录（支持 `service` / `risk` 过滤）
-- `GET /health` — 健康检查
+- `GET /health` — 健康检查（含当前检测模式）
 - `X-API-Key` 期望值默认为 `mock-test-key`（env `MOCK_DETECTION_API_KEY` 改）
+
+详细配置（llm 模式端点/模型/超时等）见 `tests/mock_detector/README.md`。
 
 ### 9.2 自定义上报间隔调试
 

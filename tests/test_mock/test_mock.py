@@ -12,6 +12,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("starlette.testclient")
 
+import os
 import sys
 from pathlib import Path
 from unittest import mock
@@ -223,3 +224,108 @@ def test_records_limit(client_with_records: TestClient) -> None:
     body = resp.json()
     assert body["count"] == 3
     assert len(body["records"]) == 3
+
+
+# ============================================================
+# llm 检测模式
+# ============================================================
+
+
+def test_llm_mode_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MOCK_DETECTION_MODE=llm 且无 MOCK_LLM_API_KEY → 启动（import）即退出"""
+    import importlib
+
+    monkeypatch.setenv("MOCK_DETECTION_MODE", "llm")
+    monkeypatch.delenv("MOCK_LLM_API_KEY", raising=False)
+    try:
+        with pytest.raises(SystemExit, match="MOCK_LLM_API_KEY"):
+            importlib.reload(mock_server)  # 模块级常量在 import 时读 env 并校验
+    finally:
+        monkeypatch.undo()          # 先还原 env
+        importlib.reload(mock_server)  # 再 reload 恢复默认 random 模块状态
+
+
+def test_detect_llm_mode_dispatch(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """llm 模式下 detect 走 _evaluate_llm（mock 为固定结论）"""
+
+    async def fake_evaluate(record: dict) -> dict:
+        return {
+            "record_id": record.get("record_id"),
+            "detection_status": "violation",
+            "risk_level": "high",
+            "detection_detail": {"detector": "llm", "reason": "prompt injection"},
+            "detected_at": "2026-08-22T00:00:00Z",
+        }
+
+    monkeypatch.setattr(mock_server, "DETECTION_MODE", "llm")
+    monkeypatch.setattr(mock_server, "_evaluate_llm", fake_evaluate)
+
+    resp = client.post(
+        "/detect", json=_batch_payload(2), headers={"X-API-Key": "mock-test-key"}
+    )
+    assert resp.status_code == 200
+    results = resp.json()["results"]
+    assert len(results) == 2
+    assert all(r["detection_status"] == "violation" for r in results)
+    assert all(r["detection_detail"]["detector"] == "llm" for r in results)
+
+
+def test_evaluate_llm_degrades_on_network_error(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LLM 调用失败 → error 结论（不抛异常、不阻断上报）"""
+
+    class _Boom:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            raise ConnectionError("network down")
+
+        async def __aexit__(self, *a):
+            return False
+
+    monkeypatch.setattr(mock_server.httpx, "AsyncClient", _Boom)
+
+    import asyncio
+    result = asyncio.run(mock_server._evaluate_llm({"record_id": "r1"}))  # noqa: SLF001
+    assert result["detection_status"] == "error"
+    assert "llm_check_failed" in result["detection_detail"]["reason"]
+
+
+def test_evaluate_llm_parses_markdown_wrapped_json(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LLM 返回 markdown 代码块包裹的 JSON 也能解析"""
+
+    class _FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content":
+                '```json\n{"detection_status": "violation", "risk_level": "high", "reason": "PII"}\n```'
+            }}]}
+
+    class _FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **k):
+            return _FakeResp()
+
+    monkeypatch.setattr(mock_server.httpx, "AsyncClient", _FakeClient)
+
+    import asyncio
+    result = asyncio.run(mock_server._evaluate_llm({"record_id": "r2"}))  # noqa: SLF001
+    assert result["detection_status"] == "violation"
+    assert result["risk_level"] == "high"
+    assert result["detection_detail"]["reason"] == "PII"
