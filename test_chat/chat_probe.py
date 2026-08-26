@@ -3,16 +3,16 @@
 不是 pytest 测试（命名避开 test_ 前缀，pytest 不会收集），手动运行：
 
     cd saitec-safe-cli
-    python tests/chat_probe.py           # 发 12 条（内置提示词）
-    python tests/chat_probe.py 30        # 发 30 条（循环填充）
+    python test_chat/chat_probe.py       # 发 12 条（内置提示词）
+    python test_chat/chat_probe.py 30    # 发 30 条（循环填充）
 
-配置来源（优先级：环境变量 > tests/.env > 默认值）：
+配置来源（优先级：环境变量 > test_chat/.env > 默认值）：
 
     TEST_BASE_URL      目标地址，默认 http://127.0.0.1:9001/v1
     TEST_APIKEY        模型厂商的真实 API key（必填）
     TEST_MODEL_NAME    模型名，如 deepseek-chat（必填）
 
-在 tests/.env 填入后直接运行（.env 已被 .gitignore 忽略，不会提交）：
+在 test_chat/.env 填入后直接运行（.env 已被 .gitignore 忽略，不会提交）：
 
     TEST_APIKEY=sk-xxxxxxxx
     TEST_MODEL_NAME=deepseek-chat
