@@ -1,6 +1,8 @@
 # AGENTS.md — 项目记忆（开发约定）
 
 > **分工**：开发约定看本文档；项目进度看 [PROGRESS.md](PROGRESS.md)（按需读取）；CLI 使用方法看 `.claude/skills/safe-guard-cli/SKILL.md` 与 `docs/user-guide.md`；检测服务器对接看 `docs/integration/detector-api.md`。本文档不重复它们的内容。
+>
+> **Claude Code 桥接**：本项目约定统一写在 AGENTS.md（跨工具标准）。Claude Code 不自动读它——本地建一个 `CLAUDE.md` 内容仅一行 `@AGENTS.md` 即可（import 语法，已 gitignore 不入库）。
 
 ## 1. 项目背景
 
