@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="SSGC logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+
+  <!-- 盾牌外廓 -->
+  <path d="M128 44 L194 70 V126 C194 166 166 196 128 212 C90 196 62 166 62 126 V70 Z"
+        fill="none" stroke="url(#shield)" stroke-width="11" stroke-linejoin="round"/>
+
+  <!-- 监测脉冲（雷达波纹 = 流量监测） -->
+  <circle cx="128" cy="122" r="11" fill="#22d3ee"/>
+  <circle cx="128" cy="122" r="24" fill="none" stroke="#22d3ee" stroke-opacity="0.45" stroke-width="7"/>
+  <circle cx="128" cy="122" r="39" fill="none" stroke="#38bdf8" stroke-opacity="0.16" stroke-width="5"/>
+
+  <!-- 底部指示条 -->
+  <rect x="104" y="176" width="48" height="9" rx="4.5" fill="#22d3ee" opacity="0.85"/>
+</svg>

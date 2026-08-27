@@ -1,39 +1,124 @@
-# Saitec Safe Guard CLI
+<div align="center">
 
-> 监控大模型 API 调用的反向代理 CLI：让"请求/响应"经过本工具，便于安全检测与审计。
+<img src="docs/assets/logo.svg" alt="SSGC Logo" width="128"/>
 
-把 Claude Code / Codex / 自写脚本的大模型请求指到本地 9001-9003 端口，`ssgc` 会透明转发到上游、按周期上报归一化记录到内部检测服务器、写检测结果到本地 SQLite。
+# SSGC · Safe Guard CLI
 
-## 快速上手
+**大模型 API 流量的安全哨兵** —— 反向代理透明转发，请求/响应全量审计
+
+[![PyPI](https://img.shields.io/badge/pypi-saitec--safe--guard--cli-3775A9?style=flat-square&logo=pypi&logoColor=white)](https://pypi.org/project/saitec-safe-guard-cli/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-252%20passed-2EA043?style=flat-square)](tests/)
+[![License](https://img.shields.io/badge/license-proprietary-CB3627?style=flat-square)](LICENSE)
+
+[快速上手](#-快速上手) · [特性](#-特性) · [工作原理](#-工作原理) · [命令速查](#-命令速查) · [用户手册](docs/user-guide.md) · [Detector 对接](docs/integration/detector-api.md)
+
+</div>
+
+---
+
+把 Claude Code / Codex / 自写脚本的 LLM 请求指到本地端口（9001 起），`ssgc` 在本机做透明反向代理：请求原样转发到真实上游，同时把每一轮对话**归一化记录**下来，按周期上报到内部安全检测服务器，检测结果落本地 SQLite——随时查询、导出审计报告。
+
+```text
+$ ssgc start
+ ____   ____    ____    ____
+/ ___| / ___|  / ___|  / ___|
+\___ \ \___ \ | |   _ | |  _
+ ___) |  ___) || |_/ || |_/ |
+|____/ |____/  \____|  \____|
+
+🛡️ 服务已启动 · PID 11056
+📡 服务映射（客户端 base_url → 本地端口 → 真实上游）
+  1. deepseek-openai-compatible  127.0.0.1:9001 → https://api.deepseek.com
+     客户端配置: OPENAI_BASE_URL=http://127.0.0.1:9001/v1
+检测服务器: http://127.0.0.1:8000 · 上报周期 60s
+
+$ ssgc report          # 查检测结果（clean/violation 一目了然）
+$ ssgc export -f html  # 导出审计报告（可打印转 PDF）
+```
+
+## ✨ 特性
+
+| | |
+|---|---|
+| 🔒 **透明代理** | 不改写任何内容、不做 MITM；客户端只需换一个 `base_url` |
+| 🧩 **三协议适配** | OpenAI Chat Completions · OpenAI Responses · Anthropic Messages，SSE 流式完整重组 |
+| 📝 **全量留痕** | 每轮对话归一化记录 JSONL 按天落盘——先落盘后上报，崩溃不丢数据 |
+| 🔄 **断点续传** | 上报游标 + 启动重放：detector 宕机恢复后自动补报积压 |
+| 📊 **检测留档** | 结论写本地 SQLite；`export` 一键导出 Markdown/HTML 审计报告 |
+| 🛰️ **实时监控** | `monitor` 前台彩色面板给人盯，`report --json` 给 Agent 巡检 |
+| 🤖 **Agent 友好** | 全命令 `--json` 结构化输出，内置 [Agent 操作 Skill](#-agent-集成) |
+
+## 🚀 快速上手
 
 ```bash
 pip install saitec-safe-guard-cli
 
-# --upstream 指明要监控的大模型端点（官方 / 其他厂商兼容口 / 本地模型均可）
+# 1. 初始化：指明要监控的大模型端点（官方/兼容口/中转/本地均可）
 ssgc init --api-key "<KEY>" --detector-url "http://detector:8080" \
-    --upstream "https://api.deepseek.com/anthropic"
+    --upstream "https://api.deepseek.com"
 
-# 要监控更多端点？逐个加：
-ssgc service add local-llm --upstream http://localhost:23333
-
+# 2. 启动（按输出提示把客户端 base_url 指到本地端口）
 ssgc start
 
-# 按输出提示把客户端 base_url 指到本地端口即可（OPENAI_BASE_URL / ANTHROPIC_BASE_URL）
+# 3. 等一个上报周期后查结果
+ssgc report
 ```
 
-支持的 upstream 形态：官方端点（`https://api.openai.com`）、厂商兼容口（`https://api.deepseek.com/anthropic`）、中转网关（`https://opencode.ai/zen/go/v1`）、本地模型（`http://localhost:23333`）——任何 OpenAI / Anthropic 兼容端点。
+支持任意 OpenAI / Anthropic 兼容上游：
 
-详细使用见 **[`docs/user-guide.md`](docs/user-guide.md)**——含完整命令参考、配置详解、集成示例（Claude Code / Codex / 自写客户端）、排错手册、安全注意事项。
+<details>
+<summary>📦 更多安装选项</summary>
 
-**检测服务器接口开发人员**请看 **[`docs/integration/detector-api.md`](docs/integration/detector-api.md)**——上报请求/响应契约、状态码与重试语义、幂等性要求、最小实现参考。
+```bash
+pip install "saitec-safe-guard-cli[dev]"     # + 测试/mypy
+pip install "saitec-safe-guard-cli[mock]"    # + mock detector 联调桩
+pip install "saitec-safe-guard-cli[probe]"   # + 三协议真实联调探针
+```
 
-## 状态
+源码开发：
 
-**v0.1.0 — 初版交付水平**。15 个命令全部可用；端到端链路（init→start→monitor→发请求→JSONL→上报→SQLite→report→stop）在 mock detector 上验证过；250 个 pytest 全绿。
+```bash
+git clone https://github.com/LiangRichard13/saitec-safe-guard-cli.git
+cd saitec-safe-guard-cli && pip install -e ".[dev]"
+```
 
-开发约定见 [AGENTS.md](AGENTS.md)（分层原则/测试/文档矩阵/git 规范），项目进度见 [PROGRESS.md](PROGRESS.md)。已修复的鲁棒性问题（端到端联调发现）见 [`docs/issues/cli-usage-issues.md`](docs/issues/cli-usage-issues.md)。
+</details>
 
-## 命令速查
+## 🛤️ 支持的上游形态
+
+| 场景 | `--upstream` 示例 |
+|------|-------------------|
+| OpenAI / Anthropic 官方 | `https://api.openai.com` |
+| 厂商兼容口 | `https://api.deepseek.com/anthropic` |
+| 中转网关 | `https://opencode.ai/zen/go/v1` |
+| 本地模型 | `http://localhost:23333` |
+
+## ⚙️ 工作原理
+
+```text
+你的客户端               ssgc（本机）                           外部
+─────────              ────────────────────                    ────
+Claude Code ──请求──→ ① 本地代理端口(9001..)
+                        │  透明转发（不动内容）
+                        │                     ──原请求──→  真实上游
+                        │                     ←──响应────  (DeepSeek等)
+                        │  ←──响应原样回给客户端
+                        ↓
+                     ② 边转发边"抄写"：拼出归一化记录(Record)
+                        ↓
+                     ③ 内存队列 → 周期落盘 JSONL（先落盘，防丢）
+                        ↓
+                     ④ 每 60s 取一批 POST ──────────────→  检测服务器
+                        │                                    （X-API-Key）
+                     ⑤ 结论写入本地 SQLite ←──────────────  results[] 
+                        ↓
+                   ssgc report 查询 · ssgc export 导出审计报告
+```
+
+实现细节见 [`docs/how-it-works.md`](docs/how-it-works.md)（通俗版）/ `docs/design/`（正式规格）。
+
+## 📋 命令速查
 
 | 类别 | 命令 |
 |---|---|
@@ -42,87 +127,41 @@ ssgc start
 | 运维 | `report` · `redo` · `purge` · `export` |
 | 调试 | `doctor` · `tail` |
 
-每个命令都支持 `--json` 输出（Agent 友好，`monitor` 除外——它是给人看的实时流）和 `--config <path>`（自定义配置文件位置）。`ssgc monitor` 为前台实时监控：正常流量灰色简报、violation/上报失败彩色醒目，适合安全值守场景。
+每个命令都支持 `--json`（Agent 契约：字段只增不减）与 `--config <path>`（多实例隔离）。完整用法与排错见 **[`docs/user-guide.md`](docs/user-guide.md)**。
 
-## 安装选项
+## 🤖 Agent 集成
 
-```bash
-# 仅 CLI
-pip install saitec-safe-guard-cli
-
-# 含 dev 依赖（测试 + mypy）
-pip install "saitec-safe-guard-cli[dev]"
-
-# 含 mock detector（本地联调用）
-pip install "saitec-safe-guard-cli[mock]"
-
-# 含 test_chat 联调探针（经代理发真实消息，pytest 不收集）
-pip install "saitec-safe-guard-cli[probe]"
-```
-
-源码安装：
+内置 Agent 操作指南（SKILL.md + references + evals）：让 Claude Code 等 AI 工具正确驱动本 CLI 的全部功能。clone 后建本地链接即可启用：
 
 ```bash
-git clone https://github.com/LiangRichard13/saitec-safe-guard-cli.git
-cd saitec-safe-guard-cli
-pip install -e ".[dev]"
-```
-
-## Agent Skill（教 AI 工具操作本 CLI）
-
-`skills/ssgc/` 内置一份 Agent 操作指南（SKILL.md + references + evals）：涵盖初始化、服务增删改、启停、检测查询、导出报告、定时心跳监控与排错的完整操作方法，供 Claude Code 等 AI 编码工具加载后直接、正确地驱动本 CLI。
-
-Claude Code 的项目级 skill 只识别 `.claude/skills/<name>/`，而 `.claude/` 不入库——clone 后请本地自建链接（二选一即可）：
-
-```bash
-# Windows（目录 junction，无需管理员；⚠️ 目标须绝对路径——mklink 相对路径按当前目录解析会指错）
+# Windows（junction，无需管理员）
 cmd /c mklink /J "<repo>\.claude\skills\ssgc" "<repo>\skills\ssgc"
-
 # Unix
 mkdir -p .claude/skills && ln -s ../../skills/ssgc .claude/skills/ssgc
 ```
 
-其他 AI 工具（读 AGENTS.md 的）可直接引用 `skills/ssgc/SKILL.md` 原文。
+## 🗂️ 项目结构
 
-## 设计文档
-
-实现原理通俗导览见 [`docs/how-it-works.md`](docs/how-it-works.md)（数据流/六层架构/关键机制/设计取舍）。详细设计见 `docs/design/`：
-
-- `saitec-safe-guard-cli-design.md` — 总体设计
-- `architecture.md` — 6 层架构与代码组织
-- `data-model.md` — SQLite + JSONL 数据模型
-
-## 项目结构
-
-```
+```text
 src/ssgc/
-├── core/         # Layer 1：数据模型 + 配置 + 路径 + 工具
-├── recorder/     # Layer 2：记录器（JSONL 落盘）
-├── reporter/     # Layer 2：上报器（HTTP POST）
-├── store/        # Layer 2：存储（SQLite）
-├── adapters/     # Layer 3：协议适配（OpenAI Chat Completions / OpenAI Responses / Anthropic Messages）
-├── proxy/        # Layer 4：反向代理核心
-├── runtime/      # Layer 5：运行时编排
-└── cli/          # Layer 6：CLI 入口
+├── core/       # L1 数据模型 + 配置三级覆盖
+├── recorder/ reporter/ store/   # L2 JSONL 落盘 · HTTP 上报 · SQLite
+├── adapters/   # L3 三协议解析（SSE 流重组）
+├── proxy/      # L4 反向代理核心（catch-all 透传）
+├── runtime/    # L5 编排：上报循环/游标续传/event_sink
+└── cli/        # L6 typer 入口 + 15 个命令
 
-tests/
-├── test_adapters/    # 协议适配单元测试
-├── test_cli/         # CLI 命令测试
-├── test_core/        # 数据模型 + 配置测试
-├── test_mock/        # mock 检测服务器自身接口测试
-├── test_proxy/       # 反向代理测试
-├── test_recorder/    # 记录器测试
-├── test_reporter/    # 上报器测试
-├── test_runtime/     # 运行时编排测试
-├── test_store/       # SQLite 测试
-└── mock_detector/     # 本地 mock 检测服务器（FastAPI）
+tests/          # 镜像分层单测 + mock_detector 联调桩 + test_chat 三协议探针 + verification 双重验证清单
+docs/           # user-guide / how-it-works / design / integration
 ```
+
+开发约定见 [AGENTS.md](AGENTS.md)，项目进度见 [PROGRESS.md](PROGRESS.md)。
 
 ## 项目命名
 
-- **GitHub / PyPI**：`saitec-safe-guard-cli`
-- **Python 包**：`ssgc`（代码内简写，与 CLI 命令一致）
-- **CLI 命令**：`ssgc`
+- **GitHub / PyPI**: `saitec-safe-guard-cli`
+- **CLI 命令 / Python 包**: `ssgc`
+- **品牌**: SSGC
 
 ## 许可证
 
