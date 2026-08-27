@@ -112,3 +112,9 @@ e6a3e8d 骨架 → 64f1798 core(三级覆盖) → 61fe087 store → 4af4449 reco
 - 真实检测服务器接口定型后：把 mock 的前缀去重经验合入其实现（见 detector-api.md 实现建议）
 - 传输膨胀若成痛点：batch gzip（Content-Encoding）——见 detector-api.md 附注
 - v2 可选：monitor attach 已运行实例（需 IPC）；CLI 增量上报协议（仅当 detector 不可改时）
+
+## 2026-08-27
+
+### fix: adapter 状态残留导致请求-响应错位（P0）<b1f61c2>
+adapter 实例在服务生命周期内复用，但未在请求间重置内部状态（_content / _finish_reason / _usage / _line_buffer）。第一个请求的响应内容累积到所有后续请求，导致报告中所有记录显示相同的响应。Adapter 基类新增 reset() 抽象方法，三个具体 adapter 实现，proxy/server.py 在 _handle() 开始时调用。anthropic 探针 12/12 验证通过。
+教训: 有状态的单例对象必须在每次使用前重置；adapter 的"累积"语义隐含了"从哪里开始累积"的前提，这个前提需要在调用侧显式保证。
