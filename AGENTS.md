@@ -32,7 +32,10 @@ tests/                       # 镜像 src 分层
 ├── test_core|test_recorder|test_reporter|test_store|test_adapters|test_proxy|test_runtime|test_cli/
 ├── test_mock/               # mock_detector 自身的接口测试
 ├── mock_detector/           # 联调用 mock 检测服务器（random / llm 两种模式，.env 不提交）
-└── test_chat/chat_probe.py  # 手动联调脚本：经代理发真实消息验证链路（pytest 不收集）
+└── test_chat/               # 三协议手动联调脚本（共享 test_questions.json 题库；pytest 不收集）
+    ├── chat_probe.py               # openai-chat-completions 探针
+    ├── probe_anthropic_messages.py # anthropic-messages 探针（需 `pip install anthropic`）
+    └── probe_openai_responses.py   # openai-responses 探针（待补测上游）
 
 docs/
 ├── user-guide.md            # 人类用户手册（命令/配置/排错/安全）
@@ -127,5 +130,5 @@ export SSGC_CONFIG=/tmp/<隔离目录>/config.json        # 永远用隔离配�
 
 ### 端到端调试设施
 - `tests/mock_detector/`：随机模式（无需配置）或 llm 模式（真实 LLM 判定 + 前缀去重，`.env` 配 key 不提交）
-- `tests/test_chat/chat_probe.py`：经代理发混合内容消息验证全链路
+- `tests/test_chat/`：三个协议探针脚本共享 `test_questions.json` 题库，分别打 openai-chat-completions / anthropic-messages / openai-responses 的现役服务做真实联调（暴露客户端解码/归一化/上报链路问题）
 - 注意：`tests/mock_detector/.env` 存在时 mock 测试自动跳过 import 校验用例并强制 random 模式（设计行为）

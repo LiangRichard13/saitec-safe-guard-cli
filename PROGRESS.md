@@ -5,6 +5,10 @@
 
 ## 2026-08-27
 
+### test: test_chat 三协议联调探针（共享题库 + anthropic 实测） <b2b87d8>
+chat_probe.py 内嵌 PROMPTS 抽到 test_questions.json（每条带 tag），新增 probe_anthropic_messages.py（官方 anthropic SDK，共享 TEST_BASE_URL/APIKEY/MODEL）与 probe_openai_responses.py（脚本已就位，待用户拿到 Responses API 上游 key 后补测）。现役 DeepSeek /anthropic 口实测 12 条全绿（流式 2 + 非流式 10）；JSONL 归一化正确（request.messages/response.content/usage/finish_reason 完整）；上报链路双端验证通过（mock detector 端 13 条 anthropic 记录收到判定结论）。
+教训: 三协议 finish_reason 保留原生值（end_turn/stop/completed）不翻译——detector 侧自己解释；控制台的"空回复"可能是渲染截断而非数据丢失，JSONL 原始内容为准。
+
 ### feat: export 检测报告导出命令（md/html 双格式） <4602744>
 `ssgc export`：SQLite 结论 + JSONL 完整对话首次 join（`_load_records_bulk` 单次遍历防 O(N×M)；JSONL 缺失标注仅结论）。默认只导 suspicious/violation/error（clean 占 95%+ 会稀释重点；全量显式 `--status all`）。单份数据双渲染器保证 md/html 内容对齐；HTML 自包含、异常全展开/all 导出时 clean 折叠、onbeforeprint 展开适配打印转 PDF、全文 escape 防 XSS。store.query 加 SQL 层 status IN 过滤。+13 测试共 250 绿。
 教训: asyncio.run(_q) 少调用括号会被 CLI 的 except-emit 吞成 ok=False 静默失败——CLI 错误路径输出必须进测试断言 stdout payload，不能只看 exit code。
