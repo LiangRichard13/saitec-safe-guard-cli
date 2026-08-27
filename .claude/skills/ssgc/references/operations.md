@@ -105,6 +105,10 @@ ssgc purge --retention-days 30 --json             # 执行
 - CLI：`ssgc logs --tail 100 [--service NAME]`（子串过滤）
 - 上报循环的关键日志行：`runtime started` / `report failed (kind=...)` / `X-API-Key 失效` / `runtime stopped`
 
+### tail（实时跟新记录）
+
+`ssgc tail [--service NAME]`：从启动时刻起跟踪当日 `records-*.jsonl` 的**新增行**（跳过历史），每行一条 Record JSON。首行 `# tailing <file>` 是注释，解析时跳过 `#` 开头行；Ctrl+C 退出。适合"实时感知新流量"（Agent 挂后台跟读）；violation 结论仍滞后一个上报周期，结论查询用 `report`。注意 `--level` 过滤匹配的 `level` 字段在 Record 中不存在（对 records 流无效）。
+
 ---
 
 ## 4. detector 对接契约摘要

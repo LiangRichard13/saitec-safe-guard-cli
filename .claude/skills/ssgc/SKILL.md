@@ -62,7 +62,7 @@ ssgc report [--since 1h|30m|7d|ISO8601] [--service NAME] [--limit N] --json
 ssgc redo RECORD_ID --json            # 重报单条（绕过游标）
 ssgc purge [--retention-days N] [--dry-run]   # 清 JSONL/日志备份/SQLite
 ssgc logs --tail N [--service NAME]
-ssgc tail --json [--service NAME] [--level L]   # 实时跟踪 JSONL 事件流
+ssgc tail [--service NAME]           # 实时跟踪当日 records JSONL 新增行（每行一条 Record）
 ```
 
 `--endpoint-type` 枚举：`openai-chat-completions` / `openai-responses` / `anthropic-messages`。缺省按 upstream URL 猜测（含 `anthropic` → anthropic-messages，否则 openai-chat-completions），输出里有 `endpoint_type_guessed` 标记。
