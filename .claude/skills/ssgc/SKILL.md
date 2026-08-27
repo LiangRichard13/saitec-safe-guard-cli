@@ -61,7 +61,7 @@ ssgc validate
 ssgc report [--since 1h|30m|7d|ISO8601] [--service NAME] [--limit N] --json
 ssgc export [-f md|html] [-o PATH] [--since 7d] [--status suspicious,violation,error|all] --json
                                        # 导出报告（默认只导异常；含完整对话，从 JSONL 关联原文）
-ssgc redo RECORD_ID --json            # 重报单条（绕过游标）
+ssgc redo RECORD_ID --json            # 重报单条（支持 UUID 前缀；歧义时列候选）
 ssgc purge [--retention-days N] [--dry-run]   # 清 JSONL/日志备份/SQLite
 ssgc logs --tail N [--service NAME]
 ssgc tail [--service NAME]           # 实时跟踪当日 records JSONL 新增行（每行一条 Record）

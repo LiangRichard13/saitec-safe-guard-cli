@@ -15,9 +15,17 @@ from ...reporter.reporter import Reporter
 from ...store.store import Store
 
 
-def _find_record(records_dir: Path, record_id: str) -> Record | None:
+def _find_record(records_dir: Path, record_id: str) -> tuple[Record | None, list[str]]:
+    """按 record_id 查 JSONL（支持完整 UUID 或前缀匹配）。
+
+    返回 (record, candidates)：
+      - 唯一匹配：(Record, [])
+      - 未找到：(None, [])
+      - 多条前缀匹配歧义：(None, [rid1, rid2, ...])
+    """
     if not records_dir.exists():
-        return None
+        return None, []
+    candidates: list[dict] = []
     for f in sorted(records_dir.glob("records-*.jsonl")):
         for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
             line = line.strip()
@@ -27,21 +35,29 @@ def _find_record(records_dir: Path, record_id: str) -> Record | None:
                 d = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if d.get("record_id") == record_id:
-                return Record(
-                    record_id=d["record_id"],
-                    service=d["service"],
-                    endpoint_type=d["endpoint_type"],
-                    upstream=d["upstream"],
-                    path=d["path"],
-                    timestamp=d["timestamp"],
-                    elapsed_ms=d["elapsed_ms"],
-                    status_code=d["status_code"],
-                    error=d.get("error"),
-                    request=d.get("request", {}),
-                    response=d.get("response", {}),
-                )
-    return None
+            rid = d.get("record_id")
+            if not rid:
+                continue
+            if rid == record_id or rid.startswith(record_id):
+                candidates.append(d)
+    if len(candidates) == 1:
+        d = candidates[0]
+        return Record(
+            record_id=d["record_id"],
+            service=d["service"],
+            endpoint_type=d["endpoint_type"],
+            upstream=d["upstream"],
+            path=d["path"],
+            timestamp=d["timestamp"],
+            elapsed_ms=d["elapsed_ms"],
+            status_code=d["status_code"],
+            error=d.get("error"),
+            request=d.get("request", {}),
+            response=d.get("response", {}),
+        ), []
+    if len(candidates) > 1:
+        return None, [c["record_id"] for c in candidates]
+    return None, []
 
 
 def _run(record: Record, cfg_path: Path) -> dict:
@@ -65,19 +81,26 @@ def _run(record: Record, cfg_path: Path) -> dict:
 
 def do_redo(
     ctx: typer.Context,
-    record_id: str = typer.Argument(..., help="要重报的记录 ID（UUID）"),
+    record_id: str = typer.Argument(..., help="要重报的记录 ID（UUID 完整或前缀，前缀匹配多条时报错）"),
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """从 JSONL 读出指定 `record_id`，绕过游标重新上报"""
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
-    record = _find_record(path.parent / "records", record_id)
+    record, candidates = _find_record(path.parent / "records", record_id)
     if record is None:
-        emit(json_output=json_output, ok=False,
-             error={"code": "RECORD_NOT_FOUND",
-                    "message": f"在 JSONL 中未找到记录: {record_id}"},
-             exit_code=EXIT_USER_ERROR)
+        if candidates:
+            emit(json_output=json_output, ok=False,
+                 error={"code": "RECORD_ID_AMBIGUOUS",
+                        "message": f"前缀 '{record_id}' 匹配到 {len(candidates)} 条记录，请提供更长的前缀或完整 UUID:\n"
+                                   + "\n".join(f"  - {rid}" for rid in candidates)},
+                 exit_code=EXIT_USER_ERROR)
+        else:
+            emit(json_output=json_output, ok=False,
+                 error={"code": "RECORD_NOT_FOUND",
+                        "message": f"在 JSONL 中未找到记录: {record_id}（可尝试更短前缀或用 ssgc report --json 拿完整 ID）"},
+                 exit_code=EXIT_USER_ERROR)
         return
 
     try:

@@ -403,6 +403,83 @@ def test_redo_success(ready_config: Path, monkeypatch: pytest.MonkeyPatch) -> No
     assert data["data"]["record_id"] == "r123"
 
 
+def test_redo_prefix_match_single(ready_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """redo 支持 UUID 前缀匹配——唯一匹配时成功"""
+    from unittest.mock import patch
+
+    records_dir = ready_config / "records"
+    records_dir.mkdir(parents=True, exist_ok=True)
+    jsonl = records_dir / "records-2026-08-27.jsonl"
+    # 一条完整 UUID
+    jsonl.write_text(
+        json.dumps(
+            {
+                "record_id": "69f1285a-b91d-48b9-8d1c-df3a1d3277b1",
+                "service": "svc-a",
+                "endpoint_type": "openai-chat-completions",
+                "upstream": "http://up",
+                "path": "/v1",
+                "timestamp": "2026-08-27T10:00:00Z",
+                "elapsed_ms": 100,
+                "status_code": 200,
+                "request": {},
+                "response": {},
+            }
+        )
+        + "\n"
+    )
+
+    mock_result = {
+        "record_id": "69f1285a-b91d-48b9-8d1c-df3a1d3277b1",
+        "reported": True,
+        "detection_status": "clean",
+        "risk_level": "low",
+    }
+    # 前 8 位应匹配到这条
+    with patch("ssgc.cli.commands.redo._run", return_value=mock_result):
+        result = runner.invoke(app, ["redo", "69f1285a", "--json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["data"]["record_id"] == "69f1285a-b91d-48b9-8d1c-df3a1d3277b1"
+
+
+def test_redo_prefix_match_ambiguous(ready_config: Path) -> None:
+    """redo 前缀匹配多条时拒绝执行并报歧义"""
+    records_dir = ready_config / "records"
+    records_dir.mkdir(parents=True, exist_ok=True)
+    jsonl = records_dir / "records-2026-08-27.jsonl"
+    # 两条以同一前缀开头的不同 UUID
+    lines = [
+        json.dumps({
+            "record_id": "abc12345-0000-0000-0000-000000000001",
+            "service": "svc-a", "endpoint_type": "openai-chat-completions",
+            "upstream": "http://up", "path": "/v1",
+            "timestamp": "2026-08-27T10:00:00Z", "elapsed_ms": 100,
+            "status_code": 200, "request": {}, "response": {},
+        }),
+        json.dumps({
+            "record_id": "abc12345-0000-0000-0000-000000000002",
+            "service": "svc-a", "endpoint_type": "openai-chat-completions",
+            "upstream": "http://up", "path": "/v1",
+            "timestamp": "2026-08-27T10:01:00Z", "elapsed_ms": 100,
+            "status_code": 200, "request": {}, "response": {},
+        }),
+    ]
+    jsonl.write_text("\n".join(lines) + "\n")
+
+    result = runner.invoke(app, ["redo", "abc12345", "--json"])
+
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["ok"] is False
+    assert data["error"]["code"] == "RECORD_ID_AMBIGUOUS"
+    # 错误信息列出候选完整 ID 让用户选更长的前缀
+    assert "000000000001" in data["error"]["message"]
+    assert "000000000002" in data["error"]["message"]
+
+
 # ============================================================
 # purge（实际清理）
 # ============================================================

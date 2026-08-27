@@ -14,6 +14,12 @@ chat_probe.py 内嵌 PROMPTS 抽到 test_questions.json（每条带 tag），新
 教训: asyncio.run(_q) 少调用括号会被 CLI 的 except-emit 吞成 ok=False 静默失败——CLI 错误路径输出必须进测试断言 stdout payload，不能只看 exit code。
 
 
+## 2026-08-27
+
+### fix: P2 redo 命令支持 UUID 前缀匹配（修复 report→redo 链路断裂） <待提交>
+用户报告：`ssgc redo 69f1285a`（从 report 表格复制 8 位前缀）报"在 JSONL 中未找到记录"。根因：`report.py:130` 人类输出截断 `record_id` 为前 8 位（表格紧凑），`redo.py:30` 用 `==` 严格匹配完整 UUID——命令链路断裂。修复：`_find_record` 改为支持完整 UUID 与前缀匹配（唯一/多条歧义/未找到三态），歧义返回 `RECORD_ID_AMBIGUOUS` 错误列出候选完整 ID；未找到时报错提示用 `ssgc report --json` 拿完整 ID。真实验证 `ssgc redo 69f1285a` 成功返回完整 UUID + 检测结果。
+教训: 命令链路上下游（report 输出 ID 给人看 → redo 接收 ID 重报）必须闭环——人类输出截断 N 位时下游就该支持 N 位前缀匹配，否则用户只能先 `--json` 拿全 ID 再粘回去。
+
 ## 2026-08-26
 
 ### docs: 新增 how-it-works.md 实现原理通俗导览 <0cc1502>
