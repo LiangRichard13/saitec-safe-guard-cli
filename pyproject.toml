@@ -11,13 +11,29 @@ requires-python = ">=3.10"
 license = { text = "Proprietary" }
 authors = [{ name = "SaITec" }]
 keywords = ["llm", "reverse-proxy", "security", "monitoring"]
-
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Networking :: Monitoring",
+]
 dependencies = [
     "aiohttp>=3.9",
     "typer>=0.12",
     # CLI 人类可读输出的视觉系统（typer 已传递依赖，此处显式声明因直接 import）
     "rich>=13.8",
 ]
+
+[project.urls]
+Homepage = "https://github.com/LiangRichard13/saitec-safe-guard-cli"
+Repository = "https://github.com/LiangRichard13/saitec-safe-guard-cli"
+Issues = "https://github.com/LiangRichard13/saitec-safe-guard-cli/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -42,6 +58,9 @@ ssgc = "ssgc.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+ssgc = ["py.typed"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

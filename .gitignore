@@ -53,3 +53,5 @@ Thumbs.db
 .env
 # Claude Code bridge（本地桥接，不入库）
 CLAUDE.md
+# Claude Code 本地目录（skill 在 skills/ssgc/ 入库；本目录用 junction/symlink 自建）
+.claude/

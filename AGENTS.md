@@ -1,8 +1,12 @@
 # AGENTS.md — 项目记忆（开发约定）
 
-> **分工**：开发约定看本文档；项目进度看 [PROGRESS.md](PROGRESS.md)（按需读取）；CLI 使用方法看 `.claude/skills/ssgc/SKILL.md` 与 `docs/user-guide.md`；检测服务器对接看 `docs/integration/detector-api.md`。本文档不重复它们的内容。
+> **分工**：开发约定看本文档；项目进度看 [PROGRESS.md](PROGRESS.md)（按需读取）；CLI 使用方法看 `skills/ssgc/SKILL.md` 与 `docs/user-guide.md`；检测服务器对接看 `docs/integration/detector-api.md`。本文档不重复它们的内容。
 >
-> **Claude Code 桥接**：本项目约定统一写在 AGENTS.md（跨工具标准）。Claude Code 不自动读它——本地建一个 `CLAUDE.md` 内容仅一行 `@AGENTS.md` 即可（import 语法，已 gitignore 不入库）。
+> **Claude Code 桥接**：本项目约定统一写在 AGENTS.md（跨工具标准），skill 内容在 `skills/ssgc/`（入库）。Claude Code 不自动读它们——本地自建（`.claude/` 已 gitignore 不入库）：
+> 1. `CLAUDE.md` 写一行 `@AGENTS.md`（import 语法）
+> 2. skill 链接（Windows，**目标必须是绝对路径**——mklink 相对路径按当前目录解析会指错）：
+>    `cmd /c mklink /J "<repo>\.claude\skills\ssgc" "<repo>\skills\ssgc"`
+>    Unix：`ln -s ../../skills/ssgc .claude/skills/ssgc`
 
 ## 1. 项目背景
 
@@ -33,7 +37,7 @@ tests/                       # 镜像 src 分层
 ├── test_mock/               # mock_detector 自身的接口测试
 ├── mock_detector/           # 联调用 mock 检测服务器（random / llm 两种模式，.env 不提交）
 └── test_chat/               # 三协议手动联调脚本（共享 test_questions.json 题库；pytest 不收集）
-    ├── chat_probe.py               # openai-chat-completions 探针
+    ├── probe_openai_completions.py # openai-chat-completions 探针
     ├── probe_anthropic_messages.py # anthropic-messages 探针（需 `pip install anthropic`）
     └── probe_openai_responses.py   # openai-responses 探针（待补测上游）
 
@@ -44,7 +48,8 @@ docs/
 ├── integration/detector-api.md  # 检测服务器对接契约（含去重实现建议）
 └── issues/cli-usage-issues.md   # 历史问题清单
 
-.claude/skills/ssgc/  # 教 Agent 操作本 CLI 的 skill（SKILL.md + references + evals）
+skills/ssgc/                 # 教 Agent 操作本 CLI 的 skill（SKILL.md + references + evals；
+                             #    Claude Code 用户本地 junction 到 .claude/skills/ssgc，见头部说明）
 ```
 
 ## 3. 分层原则（维护扩展的铁律）

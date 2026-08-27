@@ -68,6 +68,22 @@ cd saitec-safe-guard-cli
 pip install -e ".[dev]"
 ```
 
+## Agent Skill（教 AI 工具操作本 CLI）
+
+`skills/ssgc/` 内置一份 Agent 操作指南（SKILL.md + references + evals）：涵盖初始化、服务增删改、启停、检测查询、导出报告、定时心跳监控与排错的完整操作方法，供 Claude Code 等 AI 编码工具加载后直接、正确地驱动本 CLI。
+
+Claude Code 的项目级 skill 只识别 `.claude/skills/<name>/`，而 `.claude/` 不入库——clone 后请本地自建链接（二选一即可）：
+
+```bash
+# Windows（目录 junction，无需管理员；⚠️ 目标须绝对路径——mklink 相对路径按当前目录解析会指错）
+cmd /c mklink /J "<repo>\.claude\skills\ssgc" "<repo>\skills\ssgc"
+
+# Unix
+mkdir -p .claude/skills && ln -s ../../skills/ssgc .claude/skills/ssgc
+```
+
+其他 AI 工具（读 AGENTS.md 的）可直接引用 `skills/ssgc/SKILL.md` 原文。
+
 ## 设计文档
 
 实现原理通俗导览见 [`docs/how-it-works.md`](docs/how-it-works.md)（数据流/六层架构/关键机制/设计取舍）。详细设计见 `docs/design/`：
@@ -110,4 +126,4 @@ tests/
 
 ## 许可证
 
-内部项目，保留所有权利。
+内部项目，保留所有权利——详见 [LICENSE](LICENSE)。
