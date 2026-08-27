@@ -146,22 +146,28 @@ def _collect_rows(
         records = _load_records_bulk(records_dir, set(by_id))
         rows = []
         for r in results:
-            messages, reply = _extract_dialogue(records.get(r.record_id))
+            rec = records.get(r.record_id)
+            messages, reply = _extract_dialogue(rec)
             detail = r.detection_detail if isinstance(r.detection_detail, dict) else r.detection_detail
             rows.append({
                 "record_id": r.record_id,
                 "service": r.service,
+                "endpoint_type": r.endpoint_type,
+                "upstream": r.upstream,
+                "path": rec.path if rec else "-",
                 "model": r.model,
                 "timestamp": r.timestamp,
                 "status_code": r.status_code,
                 "elapsed_ms": r.elapsed_ms,
+                "finish_reason": r.finish_reason,
                 "prompt_tokens": r.prompt_tokens,
                 "completion_tokens": r.completion_tokens,
                 "detected_at": r.detected_at,
                 "detection_status": r.detection_status,
                 "risk_level": r.risk_level,
                 "detail": detail,
-                "has_original": records.get(r.record_id) is not None,
+                "error": r.error,
+                "has_original": rec is not None,
                 "messages": messages,
                 "reply": reply,
             })
@@ -222,13 +228,14 @@ def _render_markdown(data: dict) -> str:
         return "\n".join(L)
 
     L.append("## 汇总\n")
-    L.append("| # | 时间 (UTC) | 服务 | 模型 | 结论 | 风险 | 理由 | 记录 ID |")
-    L.append("|---|---|---|---|---|---|---|---|")
+    L.append("| # | 时间 (UTC) | 服务 | 上游 | 模型 | 结论 | 风险 | 理由 | 记录 ID |")
+    L.append("|---|---|---|---|---|---|---|---|---|")
     for i, r in enumerate(data["rows"], 1):
         ts = (r["timestamp"] or "")[:19].replace("T", " ")
         reason = _detail_reason(r["detail"]).replace("|", "\\|")
+        upstream_short = (r["upstream"] or "").replace("https://", "").replace("http://", "")[:30]
         L.append(
-            f"| {i} | {ts} | {r['service']} | {r['model'] or '-'} "
+            f"| {i} | {ts} | {r['service']} | {upstream_short} | {r['model'] or '-'} "
             f"| {r['detection_status']} | {r['risk_level'] or '-'} | {reason[:60]} "
             f"| `{r['record_id'][:8]}` |"
         )
@@ -243,12 +250,17 @@ def _render_markdown(data: dict) -> str:
         L.append("|---|---|")
         L.append(f"| 时间 | {r['timestamp']} |")
         L.append(f"| 服务 / 模型 | {r['service']} / {r['model'] or '-'} |")
+        L.append(f"| 上游端点 | {r['upstream']} |")
+        L.append(f"| 协议 / 路径 | {r['endpoint_type']} / {r['path']} |")
         toks = "-"
         if r["prompt_tokens"] is not None or r["completion_tokens"] is not None:
             toks = f"{r['prompt_tokens'] or 0} + {r['completion_tokens'] or 0}"
         L.append(f"| tokens (p/c) | {toks} |")
         L.append(f"| 上游耗时 / 状态码 | {r['elapsed_ms']}ms / {r['status_code']} |")
+        L.append(f"| 结束原因 | {r['finish_reason'] or '-'} |")
         L.append(f"| 检测完成时间 | {r['detected_at']} |")
+        if r.get("error"):
+            L.append(f"| 代理错误 | ⚠️ {r['error']} |")
         L.append("")
         if r["detail"]:
             L.append("**detection_detail**:\n")
@@ -393,10 +405,14 @@ def _render_html(data: dict) -> str:
 <div class="meta-grid">
 <b>记录 ID</b><span style="font-family:ui-monospace,Consolas,monospace">{_esc(r["record_id"])}</span>
 <b>服务</b><span>{_esc(r["service"])}</span>
+<b>上游端点</b><span>{_esc(r["upstream"])}</span>
+<b>协议 / 路径</b><span>{_esc(r["endpoint_type"])} / {_esc(r["path"])}</span>
 <b>时间 (UTC)</b><span>{_esc(r["timestamp"])}</span>
 <b>检测完成</b><span>{_esc(r["detected_at"])}</span>
 <b>tokens (p+c)</b><span>{toks}</span>
 <b>耗时 / HTTP</b><span>{r["elapsed_ms"]}ms / {r["status_code"]}</span>
+<b>结束原因</b><span>{_esc(r["finish_reason"] or "-")}</span>
+{"<b>代理错误</b><span style='color:#b54708'>⚠️ " + _esc(r["error"]) + "</span>" if r.get("error") else ""}
 </div>
 {detail_html}
 <h3 class="sec">对话内容</h3>
@@ -410,6 +426,7 @@ def _render_html(data: dict) -> str:
         f"<tr><td>{i}</td>"
         f"<td>{_esc((r['timestamp'] or '')[:19].replace('T', ' '))}</td>"
         f"<td>{_esc(r['service'])}</td>"
+        f"<td>{_esc((r['upstream'] or '').replace('https://', '').replace('http://', '')[:30])}</td>"
         f"<td>{_esc(r['model'] or '-')}</td>"
         f"<td><span class='badge' style='background:{_STATUS_COLOR.get(r['detection_status'], '#667085')}'>{_esc(r['detection_status'])}</span></td>"
         f"<td class='risk'>{_esc(r['risk_level'] or '-')}</td>"
@@ -443,7 +460,7 @@ window.onbeforeprint=function(){{document.querySelectorAll('details').forEach(fu
 {empty_note}
 <section class="summary">
 <h2>汇总</h2>
-<table><thead><tr><th>#</th><th>时间 (UTC)</th><th>服务</th><th>模型</th><th>结论</th><th>风险</th><th>理由</th><th>ID</th></tr></thead>
+<table><thead><tr><th>#</th><th>时间 (UTC)</th><th>服务</th><th>上游</th><th>模型</th><th>结论</th><th>风险</th><th>理由</th><th>ID</th></tr></thead>
 <tbody>
 {table_rows}
 </tbody></table>

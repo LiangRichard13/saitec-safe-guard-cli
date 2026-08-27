@@ -36,12 +36,19 @@ def _run(since: datetime, service: str | None, limit: int, db_path: Path) -> lis
             {
                 "record_id": r.record_id,
                 "service": r.service,
+                "endpoint_type": r.endpoint_type,
+                "upstream": r.upstream,
                 "timestamp": r.timestamp,
                 "detection_status": r.detection_status,
                 "risk_level": r.risk_level,
                 "model": r.model,
+                "status_code": r.status_code,
                 "elapsed_ms": r.elapsed_ms,
+                "finish_reason": r.finish_reason,
+                "prompt_tokens": r.prompt_tokens,
+                "completion_tokens": r.completion_tokens,
                 "detected_at": r.detected_at,
+                "error": r.error,
                 "detail": r.detection_detail,
             }
             for r in results
