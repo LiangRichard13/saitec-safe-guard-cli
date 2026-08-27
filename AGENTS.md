@@ -17,7 +17,7 @@
 ```
 src/ssgc/                  # 六层架构，依赖只能向下（见 §3）
 ├── core/                    # L1 最底层：models(数据模型) config(加载/校验/三级覆盖)
-│                            #    paths(platformdirs 路径) utils(纯函数)
+│                            #    paths(路径解析 ~/.ssgc) utils(纯函数)
 ├── recorder/                # L2：recorder.py（内存队列 + JSONL 按天落盘，崩溃恢复源）
 ├── reporter/                # L2：reporter.py（HTTP 批量上报，X-API-Key，错误三分类 AUTH/PAYLOAD/SERVER）
 ├── store/                   # L2：store.py（SQLite WAL：detection_results + report_cursor 游标）

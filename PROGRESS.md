@@ -5,6 +5,10 @@
 
 ## 2026-08-26
 
+### docs: 新增 how-it-works.md 实现原理通俗导览 <0cc1502>
+
+### fix: banner ASCII art 字母顺序拼错 SGCS→SSGC（手拼顺序笔误） <61e70d7>
+
 ### fix: 复查修 4 处 ssgc-cli 误转产物（重命名遗漏） <0e08d98>
 用户要求脚本+grep 双重复查：发现 sed 把 `safe-guard-cli` 误转 `ssgc-cli`——AGENTS.md 两处指向不存在的 skills/ssgc-cli/ 路径、SKILL.md frontmatter name、evals.json skill_name；另心跳脚本 docstring 5 处旧命令、worktree 目录残留。全部修正后脚本/grep/运行时 help 三层验证 0 残留。
 教训: 全局替换的残留检查 pattern 必须包含"替换产物"（ssgc-cli）而不仅是旧名（safe-guard）——误转产物引用失效比旧名残留更危险；skill 目录改名时 frontmatter name 与 evals.json 的 skill_name 是独立引用点。
