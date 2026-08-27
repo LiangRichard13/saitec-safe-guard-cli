@@ -16,7 +16,11 @@ chat_probe.py 内嵌 PROMPTS 抽到 test_questions.json（每条带 tag），新
 
 ## 2026-08-27
 
-### fix: P2 redo 命令支持 UUID 前缀匹配（修复 report→redo 链路断裂） <f28cc70>
+### feat: --help 全面增强（emoji + Examples + Troubleshooting + 白色正文） <待提交>
+typer monkey-patch（`typer.rich_utils.STYLE_HELPTEXT = "white"`）解决 help 正文灰色看不清的问题。顶层 `ssgc --help` 重写为 Quick start + Documentation 双节；21 处命令 docstring 全部重写为模板化结构（🎯 emoji 简介 + 详情 + `\b` Examples + Troubleshooting + See also），覆盖 init/start/monitor/stop/restart/status/report/validate/doctor/logs/tail/redo/purge/export + config×4 + service×4。docstring 修改不影响测试（测试用 CliRunner --json）。251 pytest 全绿。
+教训: typer 默认 help 样式 `STYLE_HELPTEXT="dim"`（灰色），rich 接管渲染时正文仍按 click 默认 dim——需要 monkey-patch 内部常量，无官方 API。
+
+## 2026-08-27
 用户报告：`ssgc redo 69f1285a`（从 report 表格复制 8 位前缀）报"在 JSONL 中未找到记录"。根因：`report.py:130` 人类输出截断 `record_id` 为前 8 位（表格紧凑），`redo.py:30` 用 `==` 严格匹配完整 UUID——命令链路断裂。修复：`_find_record` 改为支持完整 UUID 与前缀匹配（唯一/多条歧义/未找到三态），歧义返回 `RECORD_ID_AMBIGUOUS` 错误列出候选完整 ID；未找到时报错提示用 `ssgc report --json` 拿完整 ID。真实验证 `ssgc redo 69f1285a` 成功返回完整 UUID + 检测结果。
 教训: 命令链路上下游（report 输出 ID 给人看 → redo 接收 ID 重报）必须闭环——人类输出截断 N 位时下游就该支持 N 位前缀匹配，否则用户只能先 `--json` 拿全 ID 再粘回去。
 

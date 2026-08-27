@@ -114,7 +114,20 @@ def list_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """列出所有监控服务（客户端 base_url → 本地端口 → 真实上游）"""
+    """📡 列出所有监控服务（客户端 base_url → 本地端口 → 真实上游）
+
+    输出每个 service 的 name / port / upstream / endpoint_type / record_body，
+    并附带客户端应配置的 base_url 提示（如 `OPENAI_BASE_URL=http://127.0.0.1:9001/v1`）。
+
+    \b
+    Examples:
+      ssgc service list
+      ssgc service list --json
+
+    \b
+    See also:
+      `ssgc service add` 加新端点  `ssgc start` 启动服务后看客户端配置提示
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     data = _load_or_emit(path, json_output)
     if data is None:
@@ -160,7 +173,30 @@ def add_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """添加一个监控服务（转发到指定上游端点）"""
+    """➕ 添加一个监控服务（转发到指定上游端点）
+
+    在 config.json 的 `services` 数组追加一项。`--port` 缺省时从 9001 起
+    自动分配空闲端口。`--endpoint-type` 缺省时按 upstream URL 猜测
+    （含 `anthropic` → anthropic-messages，否则 openai-chat-completions）。
+
+    改完需 `ssgc restart` 生效。
+
+    \b
+    Examples:
+      ssgc service add deepseek-claude --upstream https://api.deepseek.com/anthropic
+      ssgc service add local-llm --upstream http://localhost:23333 --port 9010
+      ssgc service add openai-resp --upstream https://api.openai.com \\
+          --endpoint-type openai-responses
+
+    \b
+    Troubleshooting:
+      • NAME_EXISTS → 服务名重复，换个名字
+      • upstream 写成完整 URL（`.../v1/chat/completions`）→ 警告但不阻止，建议改回 base URL
+
+    \b
+    See also:
+      `ssgc service list` 看现有    `ssgc service set` 改字段  `ssgc service remove` 删
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     data = _load_or_emit(path, json_output)
     if data is None:
@@ -222,7 +258,18 @@ def remove_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """移除一个监控服务"""
+    """➖ 移除一个监控服务
+
+    从 config.json 的 `services` 数组删除指定 name。改完需 `ssgc restart` 生效。
+
+    \b
+    Examples:
+      ssgc service remove local-llm
+
+    \b
+    Troubleshooting:
+      • NAME_NOT_FOUND → 服务名不存在，`ssgc service list` 看实际名字
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     data = _load_or_emit(path, json_output)
     if data is None:
@@ -261,7 +308,22 @@ def set_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """修改一个监控服务的字段（至少给一项）"""
+    """🔧 修改一个监控服务的字段（至少给一项）
+
+    改指定 name 的 service 的 upstream / endpoint-type / port / record-body。
+    至少给一项修改。改完需 `ssgc restart` 生效。
+
+    \b
+    Examples:
+      ssgc service set local-llm --upstream http://localhost:11434
+      ssgc service set deepseek-claude --port 9010
+      ssgc service set NAME --no-record-body   # 不记录请求/响应体
+
+    \b
+    Troubleshooting:
+      • NAME_NOT_FOUND → `ssgc service list` 看实际名字
+      • 改完没生效 → `ssgc restart`
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     data = _load_or_emit(path, json_output)
     if data is None:

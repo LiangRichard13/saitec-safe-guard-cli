@@ -16,7 +16,23 @@ def tail(
     service: str | None = typer.Option(None, "--service", "-s", help="按服务过滤"),
     level: str | None = typer.Option(None, "--level", help="最低日志级别（debug/info/warning/error）"),
 ) -> None:
-    """实时跟踪 JSONL 事件流（按 --service / --level 过滤）"""
+    """📡 实时跟踪当日 JSONL 新增记录（类似 `tail -f records-*.jsonl`）
+
+    从启动时刻起跟踪当日 `records-*.jsonl` 的**新增行**（跳过历史），
+    每行一条 Record JSON。首行 `# tailing <file>` 是注释，解析时跳过 `#`
+    开头行。Ctrl+C 退出。
+
+    \b
+    Examples:
+      ssgc tail                          # 跟踪当日全部新增 Record
+      ssgc tail --service deepseek-claude   # 只看某服务
+      ssgc tail | jq .                   # 流式处理（jq 等工具）
+
+    \b
+    See also:
+      `ssgc logs` 看运行日志（不同：tail 是 Record 流，logs 是进程日志）
+      `ssgc report` 按时间窗查询 SQLite 里的检测结论
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     records_dir = path.parent / "records"
 

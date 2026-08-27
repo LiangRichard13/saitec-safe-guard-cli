@@ -55,7 +55,35 @@ def doctor(
     json_output: bool = typer.Option(False, "--json"),
     quick: bool = typer.Option(False, "--quick", help="跳过 API 探测（仅本地检查）"),
 ) -> None:
-    """自检：端口可绑 / API key 有效 / 磁盘空间 / SQLite 完整性 / JSONL 可写"""
+    """🩺 深度自检（端口 / API key / 磁盘 / SQLite / JSONL）
+
+    6 项检查，按顺序：
+    1. config         — 文件存在 + schema 校验通过
+    2. port           — 每个 service 端口可绑 / 已被 service 监听
+    3. disk           — 数据目录可用空间 ≥ 1GB
+    4. sqlite         — results.db 可连接 + WAL 模式正常
+    5. jsonl          — records/ 目录可写
+    6. api_key        — 向 detector 发最小请求验 401/403（`--quick` 跳过）
+
+    任一项 fail → exit 1，`data.checks` 列出所有结果。
+
+    \b
+    Examples:
+      ssgc doctor                 # 完整检查
+      ssgc doctor --quick         # 跳过 API 探测（离线 / 不想打扰 detector）
+      ssgc doctor --json          # Agent 解析用
+
+    \b
+    Troubleshooting:
+      • port fail  → 改 `ssgc service set <name> --port <new>` 或 kill 占用进程
+      • sqlite fail → 备份后重命名让 CLI 重建（`mv results.db results.db.corrupt`）
+      • api_key fail → `ssgc config set detector.api_key NEW_KEY` 然后 restart
+      • disk fail  → 用 `ssgc purge` 清理过期数据
+
+    \b
+    See also:
+      `ssgc status` 轻量的存活查询   `ssgc purge` 释放空间
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     checks: list[dict] = []
 

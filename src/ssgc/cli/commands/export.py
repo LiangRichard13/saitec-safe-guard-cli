@@ -492,7 +492,32 @@ def do_export(
     service: str | None = typer.Option(None, "--service", "-s", help="按服务名过滤"),
     limit: int = typer.Option(10000, "--limit", "-n", help="导出条数上限"),
 ) -> None:
-    """导出检测报告（Markdown/HTML，含完整对话）"""
+    """📄 导出检测报告（Markdown / HTML，含完整对话）
+
+    SQLite 检测结论 + JSONL 原始对话 join 后输出可读报告。HTML 自包含
+    （单文件可直接浏览器打开，含异常展开 / 打印友好样式）。
+
+    默认只导 suspicious / violation / error（clean 占 95%+ 会稀释重点），
+    全量导出显式 `--status all`。
+
+    \b
+    Examples:
+      ssgc export                            # 默认 md，7 天异常
+      ssgc export --format html              # HTML 自包含报告
+      ssgc export --since 1d --status all    # 1 天全量
+      ssgc export --status violation --service deepseek-claude
+      ssgc export -o report.html --format html   # 指定输出路径
+
+    \b
+    Troubleshooting:
+      • NO_DB → 尚无上报（等一个 report_interval）
+      • JSONL 缺失 → 报告里标注"JSONL 缺失，仅显示结论"（可能 purge 清了）
+      • 导出为空 → 检查 `--since` 时间窗与 `--status` 过滤
+
+    \b
+    See also:
+      `ssgc report` 实时查询    `ssgc redo` 重报单条
+    """
     fmt_l = fmt.strip().lower()
     if fmt_l not in ("md", "html"):
         emit(json_output=json_output, ok=False,

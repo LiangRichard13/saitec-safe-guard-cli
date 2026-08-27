@@ -47,7 +47,22 @@ def restart_cmd(
     json_output: bool = typer.Option(False, "--json"),
     timeout: int = typer.Option(10, "--timeout", help="stop 等待超时（秒）"),
 ) -> None:
-    """stop + start 组合"""
+    """🔄 优雅重启（stop + start）
+
+    改了 config 后想让新配置生效用此命令。先 stop 旧进程（含最后一次 flush
+    + 上报），再 start 新进程。重启前会先校验配置，校验失败拒绝重启
+    （不会把正常运行的服务换成坏的）。
+
+    \b
+    Examples:
+      ssgc restart                # 默认 10s stop 超时
+      ssgc restart --timeout 30   # 大流量场景给足时间
+
+    \b
+    See also:
+      `ssgc config set` 改配置后 `ssgc restart` 生效
+      `ssgc start` 首次启动（无需 restart）
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     # 1. 校验配置

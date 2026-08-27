@@ -17,7 +17,29 @@ def purge(
     retention_days: int = typer.Option(30, "--retention-days", "-d", help="保留天数（默认 30）"),
     dry_run: bool = typer.Option(False, "--dry-run", help="只显示将要删除的内容，不实际删除"),
 ) -> None:
-    """清理 `retention_days` 之前的 JSONL 文件、日志切割备份与 SQLite 记录"""
+    """🧹 清理过期数据（JSONL / 日志备份 / SQLite）
+
+    清理三类：超期 JSONL 文件、日志切割备份（`ssgc.log.YYYY-MM-DD`）、
+    SQLite 超期 detection_results 行。活跃日志文件与未超期数据不动。
+
+    默认保留 30 天，可调。首次清理建议先用 `--dry-run` 预览。
+
+    \b
+    Examples:
+      ssgc purge --dry-run                   # 预览（不删）
+      ssgc purge                             # 清理 30 天前
+      ssgc purge --retention-days 7          # 只留 7 天
+      ssgc purge --retention-days 90 --json  # 留 90 天 + 结构化输出
+
+    \b
+    Troubleshooting:
+      • doctor 报 disk fail → 用 purge 释放空间
+      • 误清重要数据 → 从 detector 服务器拉历史（如果服务端有）
+
+    \b
+    See also:
+      `ssgc doctor` 看磁盘占用  `ssgc logs` 看日志切割文件名
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     cutoff_str = cutoff.date().isoformat()

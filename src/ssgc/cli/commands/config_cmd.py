@@ -195,7 +195,21 @@ def get_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """查看单个字段（按点路径）"""
+    """🔎 查看单个配置字段（按点路径）
+
+    字段路径格式：`<group>.<field>` 或 `services.<name>.<field>`。
+    敏感字段（api_key）自动脱敏（`sk-***`）。
+
+    \b
+    Examples:
+      ssgc config get detector.url
+      ssgc config get detector.api_key --json    # 脱敏输出
+      ssgc config get services.deepseek-claude.port
+
+    \b
+    See also:
+      `ssgc config list` 列出全部字段  `ssgc config set` 改字段
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     try:
         data = _load_raw(path)
@@ -223,7 +237,29 @@ def set_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """修改单个字段（自动快照 + 校验 + 不自动重启）"""
+    """✏️ 修改单个配置字段（自动快照 + 校验 + 不自动重启）
+
+    写入前自动备份当前 config 为 `config.json.bak.<时间戳>`，并立即做
+    schema 校验——校验失败回滚不写入（原子）。**改完需 `ssgc restart` 生效**。
+
+    值类型自动推断：`true/false`→bool、整数→int、其余字符串。
+
+    \b
+    Examples:
+      ssgc config set detector.report_interval_sec 30
+      ssgc config set detector.endpoint_path /api/v1/detect-v2
+      ssgc config set log_level debug
+      ssgc config set detector.api_key NEW_KEY   # 重设 api_key
+
+    \b
+    Troubleshooting:
+      • SET_FAILED → 字段路径不存在或值类型不对，看错误详情
+      • 改完没生效 → `ssgc restart`
+
+    \b
+    See also:
+      `ssgc config get` 查字段   `ssgc config unset` 删字段
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     try:
         data = _load_raw(path)
@@ -294,7 +330,16 @@ def unset_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """清除字段（回退到默认）"""
+    """🗑️ 清除字段（回退到默认值）
+
+    把指定字段从 config.json 移除，下次读配置时走代码默认值。
+    改完需 `ssgc restart` 生效。
+
+    \b
+    Examples:
+      ssgc config unset log_level          # 回退默认日志级别
+      ssgc config unset detector.endpoint_path  # 回退默认 /detect
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     try:
         data = _load_raw(path)
@@ -322,7 +367,20 @@ def list_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """列出所有字段（含来源：config / env / cli / default）"""
+    """📋 列出所有配置字段（含来源：config / env / cli / default）
+
+    展平 config.json + 应用环境变量覆盖后的最终视图。每个字段标注来源
+    （`config` / `env` / `default`），敏感字段脱敏。
+
+    \b
+    Examples:
+      ssgc config list                 # 人类可读表格
+      ssgc config list --json          # Agent 解析（含 source 字段）
+
+    \b
+    See also:
+      `ssgc config get KEY` 看单个字段
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     try:
         data = _load_raw(path)

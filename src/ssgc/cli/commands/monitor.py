@@ -168,7 +168,32 @@ def monitor_cmd(
         None, "--batch-size", envvar="SSGC_BATCH_SIZE", help="临时覆盖批量大小",
     ),
 ) -> None:
-    """前台实时监控：起服务 + 终端实时输出异常（Ctrl+C 退出）"""
+    """🛰️ 前台实时监控（人盯场景）
+
+    一个进程既是服务又是实时面板。与 `ssgc start` 互斥（共享 PID 文件，
+    同一配置同时只能跑一个）。正常流量灰色单行简报，**异常彩色醒目**：
+    - violation（红，含 reason）
+    - 上报失败（黄）
+    - detector AUTH 停摆（红）
+
+    Ctrl+C 或 `ssgc stop` 优雅退出，退出时打印会话总结（流量数 /
+    需关注数 / 上报失败数）。**无 --json**（此命令专为人设计）。
+
+    \b
+    Examples:
+      ssgc monitor                     # 默认上报周期
+      ssgc monitor --report-interval 5 # 调试时缩短到 5s，violation 更快可见
+
+    \b
+    Troubleshooting:
+      • ALREADY_RUNNING → 先 `ssgc stop` 再 `ssgc monitor`
+      • violation 显示滞后 → 检测结论来自 detector 异步判定，滞后一个上报周期
+
+    \b
+    See also:
+      `ssgc start` 后台跑（Agent 巡检用 status/report JSON）
+      `ssgc logs --follow` 看原始日志流
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     try:

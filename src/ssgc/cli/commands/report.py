@@ -65,7 +65,32 @@ def report(
     since: str | None = typer.Option(None, "--since", help="起始时间（ISO8601 或 1h/30m/7d）"),
     limit: int = typer.Option(100, "--limit", "-n", help="返回结果数上限"),
 ) -> None:
-    """按时间 / 服务 / 结论查询 SQLite 里的检测结果"""
+    """🔍 查询 SQLite 里的检测结论
+
+    从本地 `results.db` 查检测结果（detection_status / risk_level / detail）。
+    每条结果关联原始 Record 的 record_id / service / model。
+
+    ⚠️ **默认 `--limit 100`**：高流量窗口会被截断，**监控场景显式调大**
+    （如 `--limit 500` 或 `--limit 20000`）。
+
+    \b
+    Examples:
+      ssgc report                          # 最近 100 条（人类表格）
+      ssgc report --since 1h --json        # 最近 1 小时（Agent 解析）
+      ssgc report --since 7d --limit 500   # 7 天 500 条
+      ssgc report --service deepseek-claude
+      ssgc report --since 2026-08-27T00:00:00Z   # ISO8601 起始时间
+
+    \b
+    Troubleshooting:
+      • NO_DB → 尚无上报（等一个 report_interval）
+      • 结果数比预期少 → 调大 `--limit` 或扩大 `--since`
+      • 想看完整字段（detail / detected_at）→ 必须 `--json`
+
+    \b
+    See also:
+      `ssgc redo <record_id>` 重报某条  `ssgc export` 导出报告
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     db_path = path.parent / "results.db"
 

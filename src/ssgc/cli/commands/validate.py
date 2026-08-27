@@ -20,7 +20,23 @@ def validate_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """校验 config.json（含三级覆盖），不启动服务"""
+    """✅ 校验 config.json（含三级覆盖），不启动服务
+
+    仅读不写。校验流程：文件存在 → JSON 解析 → schema 校验 → 应用环境变量
+    覆盖 → 校验合并后的最终配置。任何一步失败立即报错。
+
+    启动 `ssgc start` 前建议先 validate 一遍，避免跑起来才发现配置错。
+
+    \b
+    Examples:
+      ssgc validate               # 通过输出 "config valid"，否则具体错误
+      ssgc validate --json        # {"ok": true} 或带 error 详情
+
+    \b
+    See also:
+      `ssgc doctor` 更全面的自检（含端口/磁盘/SQLite/JSONL）
+      `ssgc config list` 看合并后的最终配置（含 env 覆盖）
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     try:

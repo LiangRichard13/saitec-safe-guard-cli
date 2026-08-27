@@ -44,7 +44,35 @@ def start_cmd(
         help="覆盖 detector.batch_size",
     ),
 ) -> None:
-    """读配置，起多个反向代理端口，开始记录 + 定时上报"""
+    """🚀 启动后台代理服务（读配置起端口 + 记录 + 上报）
+
+    读取 ~/.ssgc/config.json（或 SSGC_CONFIG 指定的路径）配置，为每个 service
+    启动一个反向代理端口，开始记录请求/响应到 JSONL，并按周期上报到检测服务器，
+    检测结论落本地 SQLite。
+
+    启动后 PID 写入 {config_dir}/ssgc.pid。服务已在运行时拒绝重复启动
+    （返回 ALREADY_RUNNING，用 `ssgc restart` 替代）。
+
+    \b
+    Examples:
+      ssgc start                         # 默认配置
+      ssgc start --report-interval 5     # 临时 5s 上报间隔（调试用）
+      SSGC_REPORT_INTERVAL=5 ssgc start  # 等价 env 形式
+      ssgc start --batch-size 100        # 临时批量 100 条/批
+      ssgc start --config /path/cfg      # 用指定配置
+
+    \b
+    Troubleshooting:
+      • ALREADY_RUNNING   → 用 `ssgc restart` 或 `ssgc stop` 后重试
+      • 端口冲突          → `ssgc doctor` 查哪个端口被占
+      • 启动无报错但没跑  → 看 {config_dir}/logs/ssgc.log 尾部
+
+    \b
+    See also:
+      `ssgc status`   查看运行状态     `ssgc stop`    优雅停止
+      `ssgc monitor`  前台实时看流量   `ssgc restart` 重启生效配置
+      `docs/user-guide.md` §4.2 生命周期类
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     # 1. 校验配置

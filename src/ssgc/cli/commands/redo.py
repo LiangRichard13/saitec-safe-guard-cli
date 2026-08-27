@@ -85,7 +85,33 @@ def do_redo(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """从 JSONL 读出指定 `record_id`，绕过游标重新上报"""
+    """🔁 重报某条记录（绕过游标直接上报）
+
+    从 JSONL 读出指定 record_id 的完整 Record，绕过 report_cursor 直接
+    上报到 detector。常用于：
+    - 之前上报因 5xx 失败、detector 修复后补报
+    - detector 升级新规则、对历史记录重新判定
+    - `ssgc report` 看到某条 `detection_status=error` 想重试
+
+    **支持 UUID 前缀**：`ssgc redo 69f1285a`（8 位）即可，不必粘完整 UUID。
+    前缀匹配多条时返回 `RECORD_ID_AMBIGUOUS` 错误列出候选完整 ID。
+
+    \b
+    Examples:
+      ssgc redo 69f1285a                # 前缀匹配
+      ssgc redo 69f1285a-b91d-48b9-8d1c-df3a1d3277b1  # 完整 UUID
+      ssgc redo 69f1285a --json         # Agent 解析
+
+    \b
+    Troubleshooting:
+      • RECORD_NOT_FOUND → JSONL 无此 ID（可能 purge 清了，用 `--json` 找别的）
+      • RECORD_ID_AMBIGUOUS → 前缀撞多条，复制错误信息里的完整 ID 或用更长前缀
+      • 上游 detector 不可达 → 报 REDO_ERROR；下次 detector 恢复后再试
+
+    \b
+    See also:
+      `ssgc report` 找 record_id    `ssgc export` 导出整批
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     record, candidates = _find_record(path.parent / "records", record_id)

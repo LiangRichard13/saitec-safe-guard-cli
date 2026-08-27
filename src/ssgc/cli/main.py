@@ -35,9 +35,36 @@ def _configure_io_encoding() -> None:
 _configure_io_encoding()
 
 
+# help 正文样式：typer 默认灰色（dim），改为白色便于终端阅读
+try:
+    import typer.rich_utils as _rich_utils  # type: ignore[import-untyped]
+    _rich_utils.STYLE_HELPTEXT = "white"
+    _rich_utils.STYLE_HELPTEXT_FIRST_LINE = "white bold"
+except (ImportError, AttributeError):
+    pass  # typer 老版本不暴露这些常量，忽略
+
+
 app = typer.Typer(
     name="ssgc",
-    help="监控大模型 API 调用的反向代理 CLI",
+    help="""🛡️  ssgc — 大模型 API 流量反向代理监控
+
+把所有大模型 API 请求转一道到本地端口，透明转发到真实上游，
+同时记录请求/响应到 JSONL，周期上报到内部安全检测服务器，
+检测结论落本地 SQLite 供查询。
+
+\b
+🚀 Quick start:
+  ssgc init --api-key KEY --detector-url URL --upstream URL
+  ssgc start
+  ssgc status
+  ssgc report
+
+\b
+📖 Documentation:
+  docs/user-guide.md                    完整命令参考 / 配置 / 集成 / 排错
+  docs/integration/detector-api.md      检测服务器对接契约
+  docs/how-it-works.md                  实现原理通俗导览
+""",
     no_args_is_help=True,
     add_completion=False,
 )

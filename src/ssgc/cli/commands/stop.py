@@ -72,9 +72,25 @@ def stop_cmd(
     json_output: bool = typer.Option(False, "--json"),
     timeout: int = typer.Option(10, "--timeout", help="等待优雅关闭的超时（秒）"),
 ) -> None:
-    """通过 PID 文件发送 SIGTERM，等待超时后 SIGKILL 兜底
+    """🛑 优雅停止后台代理服务
 
-    Windows 用 stop.flag 文件替代（_serve.py 轮询）。
+    Unix：发送 SIGTERM，等待超时后 SIGKILL 兜底。
+    Windows：写 `{config_dir}/ssgc.stop.flag`，`_serve.py` 子进程轮询检测后
+    优雅退出；超时后 `taskkill /F` 强杀。
+
+    停止前会触发最后一次 JSONL flush + 上报，确保内存里记录不丢。
+
+    \b
+    Examples:
+      ssgc stop                # 默认 10s 超时
+      ssgc stop --timeout 30   # 大流量场景给足时间
+      ssgc stop --json         # 返回 {"ok": true, "data": {"stopped": true, "pid": ...}}
+
+    \b
+    Troubleshooting:
+      • NOT_RUNNING → PID 文件不存在，服务本就没跑
+      • STALE_PID → PID 指向的进程已死但文件残留，stop 会自动清理
+      • 超时仍停不掉 → 手动 `taskkill /F /PID <pid>` 或删 `ssgc.pid` 文件
     """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
     pid = read_pid(path)

@@ -25,7 +25,25 @@ def status_cmd(
     config_path: Path | None = typer.Option(None, "--config", "-c"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """查看各端口 / 上游 / 运行状态"""
+    """📊 查看各端口 / 上游 / 运行状态
+
+    输出 PID 是否存活、每个 service 的端口 / upstream / endpoint_type、
+    最近的日志尾部。Agent 健康巡检必备。
+
+    ⚠️ exit 0 ≠ 服务健康：服务未运行时也返回 exit 0（`ok: true, running: false`）
+    ——**健康判断必须查 `data.running` 字段**，不能只看退出码。
+
+    \b
+    Examples:
+      ssgc status                 # 人类可读表格 + 服务映射
+      ssgc status --json          # Agent 解析用
+      ssgc status --json | python -c "import sys,json; assert json.load(sys.stdin)['data']['running']"
+
+    \b
+    See also:
+      `ssgc doctor` 深度自检（端口/磁盘/SQLite/JSONL）
+      `ssgc logs` 详细日志
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     pid = read_pid(path)

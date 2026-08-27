@@ -115,7 +115,31 @@ def init_cmd(
     json_output: bool = typer.Option(False, "--json"),
     force: bool = typer.Option(False, "--force", help="覆盖已存在的 config.json"),
 ) -> None:
-    """生成 config.json（单服务；监控更多端点用 `ssgc service add`）"""
+    """🎯 生成 config.json（单服务起步）
+
+    交互式（TTY）或非交互式生成 `~/.ssgc/config.json`。首次使用必跑的命令。
+    生成单服务配置；要监控更多端点用 `ssgc service add`。
+
+    校验：api_key ≥ 8 字符；detector-url 与 upstream 必须以 http/https 开头；
+    非 TTY 且未给 `--upstream` 时报错（upstream 必须显式指定）。
+
+    \b
+    Examples:
+      ssgc init --api-key KEY --detector-url http://detector:8080 --upstream https://api.deepseek.com
+      ssgc init --api-key KEY --detector-url URL --upstream http://localhost:23333 --port 9010
+      ssgc init --api-key KEY --detector-url URL --upstream URL --force  # 覆盖已有
+
+    \b
+    Troubleshooting:
+      • config.json 已存在 → 加 `--force` 或先 `ssgc service add` 加新服务
+      • api_key 长度 < 8 → 报错；拼错上线会 401 才能发现
+      • upstream 写成完整 URL（`.../v1/chat/completions`）→ 警告但不阻止，建议改回 base URL
+
+    \b
+    See also:
+      `ssgc service add` 加监控端点   `ssgc validate` 校验配置
+      `ssgc start` 启动服务            `docs/user-guide.md` §3 快速上手
+    """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
     if path.exists() and not force:
