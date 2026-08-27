@@ -18,11 +18,15 @@ class OpenAIChatCompletionsAdapter(Adapter):
     endpoint_type = "openai-chat-completions"
 
     def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
         self._content: str = ""
         self._finish_reason: str | None = None
         self._usage: dict[str, Any] | None = None
         self._error_chunk_count: int = 0
         self._terminal: bool = False
+        self._line_buffer: str = ""
 
     def parse_request(self, body: bytes) -> dict[str, Any]:
         try:

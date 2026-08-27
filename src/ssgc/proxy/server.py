@@ -122,6 +122,9 @@ class ProxyService:
         error_msg: str | None = None
         status_code: int = 0
 
+        # 重置 adapter 状态（每个请求独立，防止上一个请求的内容/usage 残留到下一个）
+        self._adapter.reset()
+
         # 1. 读取请求体（P1-12：分块 + 大小上限防 OOM）
         try:
             request_body = await self._read_limited(request.content, self._max_body_bytes)

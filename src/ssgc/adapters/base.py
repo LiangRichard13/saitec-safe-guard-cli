@@ -63,6 +63,15 @@ class Adapter(ABC):
         return iter(())
 
     @abstractmethod
+    def reset(self) -> None:
+        """重置 adapter 状态，准备处理下一个请求。
+
+        清除上一次请求累积的 content / finish_reason / usage / line_buffer 等，
+        确保每个请求从干净状态开始。
+        """
+        ...
+
+    @abstractmethod
     def parse_request(self, body: bytes) -> dict[str, Any]:
         """解析请求体为结构化 dict（model / messages / tools 等）"""
         ...

@@ -18,6 +18,9 @@ class AnthropicMessagesAdapter(Adapter):
     endpoint_type = "anthropic-messages"
 
     def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
         self._content: str = ""
         self._finish_reason: str | None = None
         self._usage: dict[str, Any] = {
@@ -27,6 +30,7 @@ class AnthropicMessagesAdapter(Adapter):
         self._error_chunk_count: int = 0
         self._terminal: bool = False
         self._current_event: str | None = None
+        self._line_buffer: str = ""
 
     def parse_request(self, body: bytes) -> dict[str, Any]:
         try:
