@@ -5,7 +5,7 @@
 
 ## 2026-08-27
 
-### chore: PyPI 首发材料补齐（LICENSE/元数据/py.typed/skill 迁出 .claude） <待提交>
+### chore: PyPI 首发材料补齐（LICENSE/元数据/py.typed/skill 迁出 .claude） <efde220>
 SKILL 从 `.claude/skills/ssgc/` 迁到 `skills/ssgc/` 入库（.claude/ 整目录进 gitignore，本地 Claude Code 用 junction 自建——mklink 相对路径按当前目录而非 junction 所在目录解析，**必须用绝对路径目标**）；README 增 Agent Skill 节说明自建方法。PyPI 材料：新增 LICENSE（Proprietary 全权利保留）、pyproject 补 classifiers + Project-URLs、py.typed 标记（mypy strict 类型标注供下游使用）。`python -m build` + `twine check` 双 PASSED，wheel 元数据（License/License-File/Project-URL/py.typed/entry point ssgc）核实齐全。顺带收尾遗留：test_chat 改名入库（chat_probe.py→probe_openai_completions.py，b2b87d8 漏提的半截状态）、清空壳目录 tests/test_chat/tests/verification、移除残留 worktree cozy-enchanting-parnas。
 教训: ①pyproject 插入 [project.urls] 小节时必须注意其后裸写的 dependencies 会从 [project] 表"掉进" urls 表（TOML 表归属由位置决定）——本次 build 报错才暴露；②目录项表格里 `[project.urls]` 不能插在表与数组之间；③git worktree 残留用 `git worktree list` 盘点、干净则 remove。
 
