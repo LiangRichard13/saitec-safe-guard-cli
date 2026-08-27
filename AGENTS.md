@@ -132,5 +132,5 @@ export SSGC_CONFIG=/tmp/<隔离目录>/config.json        # 永远用隔离配�
 
 ### 端到端调试设施
 - `tests/mock_detector/`：随机模式（无需配置）或 llm 模式（真实 LLM 判定 + 前缀去重，`.env` 配 key 不提交）
-- `tests/test_chat/`：三个协议探针脚本共享 `test_questions.json` 题库，分别打 openai-chat-completions / anthropic-messages / openai-responses 的现役服务做真实联调（暴露客户端解码/归一化/上报链路问题）
+- `tests/test_chat/`：三个协议探针脚本共享 `test_questions.json` 题库，分别打 openai-chat-completions / anthropic-messages / openai-responses 的现役服务做真实联调（暴露客户端解码/归一化/上报链路问题）；依赖 `pip install -e ".[probe]"`（openai + anthropic SDK）
 - 注意：`tests/mock_detector/.env` 存在时 mock 测试自动跳过 import 校验用例并强制 random 模式（设计行为）

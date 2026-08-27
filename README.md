@@ -55,6 +55,9 @@ pip install "saitec-safe-guard-cli[dev]"
 
 # 含 mock detector（本地联调用）
 pip install "saitec-safe-guard-cli[mock]"
+
+# 含 test_chat 联调探针（经代理发真实消息，pytest 不收集）
+pip install "saitec-safe-guard-cli[probe]"
 ```
 
 源码安装：

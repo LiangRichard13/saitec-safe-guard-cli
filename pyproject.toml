@@ -31,6 +31,11 @@ mock = [
     # starlette 新版 TestClient 依赖 httpx（mock 服务器自身接口测试用）
     "httpx>=0.27",
 ]
+# tests/test_chat/ 手动联调探针（经代理发真实消息验证链路，pytest 不收集）
+probe = [
+    "openai>=1.0",
+    "anthropic>=0.30",
+]
 
 [project.scripts]
 ssgc = "ssgc.cli.main:app"
