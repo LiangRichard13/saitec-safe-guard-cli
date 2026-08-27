@@ -16,6 +16,10 @@ chat_probe.py 内嵌 PROMPTS 抽到 test_questions.json（每条带 tag），新
 
 ## 2026-08-27
 
+### fix(help): 移除 help 里的项目内 docs 路径引用 <d7951bc>
+pip 安装的用户看不到项目内 docs，且 docs 路径未来可能变化——help 文本必须自包含。顶层 help 的 📖 Documentation 节直接删掉；命令 See also 节只保留相关命令引用（不再写 `docs/user-guide.md §X`）。模块 docstring（源码内注释，不影响 help 输出）保留。
+教训: CLI help 是给"已安装用户"看的，项目内 docs 是给"源码阅读者/仓库访问者"看的——两个受众不重叠（pip 用户看不到项目内文件），help 里写 docs 路径是引用失效隐患。
+
 ### feat: --help 全面增强（emoji + Examples + Troubleshooting + 白色正文） <af32b9e>
 typer monkey-patch（`typer.rich_utils.STYLE_HELPTEXT = "white"`）解决 help 正文灰色看不清的问题。顶层 `ssgc --help` 重写为 Quick start + Documentation 双节；21 处命令 docstring 全部重写为模板化结构（🎯 emoji 简介 + 详情 + `\b` Examples + Troubleshooting + See also），覆盖 init/start/monitor/stop/restart/status/report/validate/doctor/logs/tail/redo/purge/export + config×4 + service×4。docstring 修改不影响测试（测试用 CliRunner --json）。251 pytest 全绿。
 教训: typer 默认 help 样式 `STYLE_HELPTEXT="dim"`（灰色），rich 接管渲染时正文仍按 click 默认 dim——需要 monkey-patch 内部常量，无官方 API。

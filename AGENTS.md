@@ -83,6 +83,8 @@ docs/
 | 配置新字段 | — | §5 配置表 + env var 列表 | 配置相关段落 | （detector 字段时）请求格式 |
 
 > **原则**：已修复的 bug 用户不会再遇到，不写排错条目教用户排一个不存在的错。bug 修复记录进 `docs/issues/cli-usage-issues.md` 与 PROGRESS.md 即可；user-guide / SKILL 只在**CLI 操作行为变化**（命令语义、参数、输出、需用户动手的差异）时更新。
+>
+> **CLI help 文本自包含**：`ssgc --help` / `ssgc <cmd> --help` 是写给"已安装用户"看的，pip 用户拿不到项目内 `docs/` 文件——help 文本**不得引用** `docs/` 路径（包括 `docs/user-guide.md §X`、`docs/integration/detector-api.md` 等）。模块 docstring（源码内注释，不渲染给终端用户）不受此限。
 
 ## 5. PROGRESS.md 约定
 
