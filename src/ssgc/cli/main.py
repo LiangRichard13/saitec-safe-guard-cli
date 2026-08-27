@@ -58,12 +58,6 @@ app = typer.Typer(
   ssgc start
   ssgc status
   ssgc report
-
-\b
-📖 Documentation:
-  docs/user-guide.md                    完整命令参考 / 配置 / 集成 / 排错
-  docs/integration/detector-api.md      检测服务器对接契约
-  docs/how-it-works.md                  实现原理通俗导览
 """,
     no_args_is_help=True,
     add_completion=False,

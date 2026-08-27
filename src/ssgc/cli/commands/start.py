@@ -71,7 +71,6 @@ def start_cmd(
     See also:
       `ssgc status`   查看运行状态     `ssgc stop`    优雅停止
       `ssgc monitor`  前台实时看流量   `ssgc restart` 重启生效配置
-      `docs/user-guide.md` §4.2 生命周期类
     """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 

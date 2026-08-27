@@ -138,7 +138,7 @@ def init_cmd(
     \b
     See also:
       `ssgc service add` 加监控端点   `ssgc validate` 校验配置
-      `ssgc start` 启动服务            `docs/user-guide.md` §3 快速上手
+      `ssgc start` 启动服务
     """
     path = config_path.expanduser().resolve() if config_path else get_config_path(ctx)
 
