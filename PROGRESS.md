@@ -132,6 +132,8 @@ e6a3e8d 骨架 → 64f1798 core(三级覆盖) → 61fe087 store → 4af4449 reco
 - 真实检测服务器接口定型后：把 mock 的前缀去重经验合入其实现（见 detector-api.md 实现建议）
 - 传输膨胀若成痛点：batch gzip（Content-Encoding）——见 detector-api.md 附注
 - v2 可选：monitor attach 已运行实例（需 IPC）；CLI 增量上报协议（仅当 detector 不可改时）
+- LAN 同机部署（2026-08-27 讨论定案）：CLI 装到 LLM 所在服务器时，客户端直连 `<llm-server>:9001`、upstream 填本机端点——唯一缺口是 `proxy/server.py` 监听地址硬编码 `127.0.0.1`，需新增 service 级配置 `listen_host`（默认不变，按 AGENTS.md 四处同步）。部署注意：ssgc 无鉴权，暴露后需防火墙/安全组限源 IP；HTTP 明文仅限可信内网。
+  - 否决的备选：让 LLM 推理服务主动转发上下文给 CLI（省请求/响应对齐）——需侵入推理服务代码或另做 ingest 端点协议，收益只有本地一跳回环延迟，不值；除非未来用自研推理服务有插桩点再评估
 
 ## 2026-08-27
 
