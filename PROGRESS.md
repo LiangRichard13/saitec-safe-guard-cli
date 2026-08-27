@@ -5,6 +5,10 @@
 
 ## 2026-08-27
 
+### fix: export 报告时间本地化 + 判断理由去截断 <待提交>
+用户实测发现两处输出问题：①报告时间（timestamp/detected_at/generated_at）显示 UTC，本地 UTC+8 差 8 小时对不上——加 `_to_local` 帮助函数（容错 Z 后缀/naive 时区/解析失败），md+html 所有时间显示处统一转本地时区，表头「时间 (UTC)」改「时间（本地）」；②汇总表/详情摘要的 reason 硬截断 `[:60]`/`[:42]`——去除截断全量显示。另清理 `_collect_rows` 无意义三元残留。核实 mock random 模式 reason 会正常显示（store 读出来 json.loads 成 dict，`_detail_reason` 容错），导出不会出错。251 pytest 绿，真实数据导出验证时间本地化 + reason 全量。
+教训: 面向人类的报告时间一律本地时区，UTC 只在机器接口（--json / JSONL）保留；"数据层 UTC + 渲染层转本地"分层是正解。
+
 ### test: test_chat 三协议联调探针（共享题库 + anthropic 实测） <b2b87d8>
 chat_probe.py 内嵌 PROMPTS 抽到 test_questions.json（每条带 tag），新增 probe_anthropic_messages.py（官方 anthropic SDK，共享 TEST_BASE_URL/APIKEY/MODEL）与 probe_openai_responses.py（脚本已就位，待用户拿到 Responses API 上游 key 后补测）。现役 DeepSeek /anthropic 口实测 12 条全绿（流式 2 + 非流式 10）；JSONL 归一化正确（request.messages/response.content/usage/finish_reason 完整）；上报链路双端验证通过（mock detector 端 13 条 anthropic 记录收到判定结论）。
 教训: 三协议 finish_reason 保留原生值（end_turn/stop/completed）不翻译——detector 侧自己解释；控制台的"空回复"可能是渲染截断而非数据丢失，JSONL 原始内容为准。
@@ -25,6 +29,8 @@ typer monkey-patch（`typer.rich_utils.STYLE_HELPTEXT = "white"`）解决 help �
 教训: typer 默认 help 样式 `STYLE_HELPTEXT="dim"`（灰色），rich 接管渲染时正文仍按 click 默认 dim——需要 monkey-patch 内部常量，无官方 API。
 
 ## 2026-08-27
+
+### fix: P2 redo 命令支持 UUID 前缀匹配（修复 report→redo 链路断裂） <f28cc70>
 用户报告：`ssgc redo 69f1285a`（从 report 表格复制 8 位前缀）报"在 JSONL 中未找到记录"。根因：`report.py:130` 人类输出截断 `record_id` 为前 8 位（表格紧凑），`redo.py:30` 用 `==` 严格匹配完整 UUID——命令链路断裂。修复：`_find_record` 改为支持完整 UUID 与前缀匹配（唯一/多条歧义/未找到三态），歧义返回 `RECORD_ID_AMBIGUOUS` 错误列出候选完整 ID；未找到时报错提示用 `ssgc report --json` 拿完整 ID。真实验证 `ssgc redo 69f1285a` 成功返回完整 UUID + 检测结果。
 教训: 命令链路上下游（report 输出 ID 给人看 → redo 接收 ID 重报）必须闭环——人类输出截断 N 位时下游就该支持 N 位前缀匹配，否则用户只能先 `--json` 拿全 ID 再粘回去。
 

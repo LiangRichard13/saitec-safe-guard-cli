@@ -148,7 +148,6 @@ def _collect_rows(
         for r in results:
             rec = records.get(r.record_id)
             messages, reply = _extract_dialogue(rec)
-            detail = r.detection_detail if isinstance(r.detection_detail, dict) else r.detection_detail
             rows.append({
                 "record_id": r.record_id,
                 "service": r.service,
@@ -165,7 +164,7 @@ def _collect_rows(
                 "detected_at": r.detected_at,
                 "detection_status": r.detection_status,
                 "risk_level": r.risk_level,
-                "detail": detail,
+                "detail": r.detection_detail,
                 "error": r.error,
                 "has_original": rec is not None,
                 "messages": messages,
@@ -202,6 +201,24 @@ def _detail_reason(detail: object) -> str:
     return ""
 
 
+def _to_local(iso: object) -> str:
+    """ISO8601 时间转本地时区 'YYYY-MM-DD HH:MM:SS'。
+
+    报告面向人类，显示本地时间而非 UTC。容忍：Z/+00:00 后缀、naive（缺时区当 UTC，
+    detector 可能不写时区）、空值、解析失败（原样返回）。
+    """
+    if not iso:
+        return "-"
+    s = str(iso)
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return s
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+
+
 # ============================================================
 # Markdown 渲染
 # ============================================================
@@ -210,8 +227,8 @@ def _detail_reason(detail: object) -> str:
 def _render_markdown(data: dict) -> str:
     L: list[str] = []
     L.append("# SSGC 检测报告\n")
-    L.append(f"- **生成时间**: {data['generated_at']}")
-    L.append(f"- **数据窗口**: {data['since']} 起")
+    L.append(f"- **生成时间**: {_to_local(data['generated_at'])}")
+    L.append(f"- **数据窗口**: {_to_local(data['since'])} 起")
     L.append(f"- **结论过滤**: {'、'.join(data['statuses'])}"
              + ("" if set(data["statuses"]) == set(VALID_STATUSES) else "（不含 clean；全量请 --status all）"))
     if data["service"]:
@@ -228,15 +245,15 @@ def _render_markdown(data: dict) -> str:
         return "\n".join(L)
 
     L.append("## 汇总\n")
-    L.append("| # | 时间 (UTC) | 服务 | 上游 | 模型 | 结论 | 风险 | 理由 | 记录 ID |")
+    L.append("| # | 时间（本地） | 服务 | 上游 | 模型 | 结论 | 风险 | 理由 | 记录 ID |")
     L.append("|---|---|---|---|---|---|---|---|---|")
     for i, r in enumerate(data["rows"], 1):
-        ts = (r["timestamp"] or "")[:19].replace("T", " ")
+        ts = _to_local(r["timestamp"])
         reason = _detail_reason(r["detail"]).replace("|", "\\|")
         upstream_short = (r["upstream"] or "").replace("https://", "").replace("http://", "")[:30]
         L.append(
             f"| {i} | {ts} | {r['service']} | {upstream_short} | {r['model'] or '-'} "
-            f"| {r['detection_status']} | {r['risk_level'] or '-'} | {reason[:60]} "
+            f"| {r['detection_status']} | {r['risk_level'] or '-'} | {reason} "
             f"| `{r['record_id'][:8]}` |"
         )
     L.append("")
@@ -248,7 +265,7 @@ def _render_markdown(data: dict) -> str:
                  + f" · `{r['record_id']}`\n")
         L.append("| 字段 | 值 |")
         L.append("|---|---|")
-        L.append(f"| 时间 | {r['timestamp']} |")
+        L.append(f"| 时间 | {_to_local(r['timestamp'])} |")
         L.append(f"| 服务 / 模型 | {r['service']} / {r['model'] or '-'} |")
         L.append(f"| 上游端点 | {r['upstream']} |")
         L.append(f"| 协议 / 路径 | {r['endpoint_type']} / {r['path']} |")
@@ -258,7 +275,7 @@ def _render_markdown(data: dict) -> str:
         L.append(f"| tokens (p/c) | {toks} |")
         L.append(f"| 上游耗时 / 状态码 | {r['elapsed_ms']}ms / {r['status_code']} |")
         L.append(f"| 结束原因 | {r['finish_reason'] or '-'} |")
-        L.append(f"| 检测完成时间 | {r['detected_at']} |")
+        L.append(f"| 检测完成时间 | {_to_local(r['detected_at'])} |")
         if r.get("error"):
             L.append(f"| 代理错误 | ⚠️ {r['error']} |")
         L.append("")
@@ -395,9 +412,9 @@ def _render_html(data: dict) -> str:
   <span class="badge" style="background:{color}">{_esc(st)}</span>
   <span class="risk">{_esc(r["risk_level"] or "-")}</span>
   <b>{i:03d}</b>
-  <span>{_esc((r["timestamp"] or "")[:19].replace("T", " "))}</span>
+  <span>{_esc(_to_local(r["timestamp"]))}</span>
   <span>{_esc(r["model"] or "-")}</span>
-  {f'<span title="{_esc(reason)}">{_esc(reason[:42])}</span>' if reason else ""}
+  {f'<span title="{_esc(reason)}">{_esc(reason)}</span>' if reason else ""}
   <span class="spacer"></span>
   <span class="tid">{_esc(r["record_id"][:8])}</span>
 </summary>
@@ -407,8 +424,8 @@ def _render_html(data: dict) -> str:
 <b>服务</b><span>{_esc(r["service"])}</span>
 <b>上游端点</b><span>{_esc(r["upstream"])}</span>
 <b>协议 / 路径</b><span>{_esc(r["endpoint_type"])} / {_esc(r["path"])}</span>
-<b>时间 (UTC)</b><span>{_esc(r["timestamp"])}</span>
-<b>检测完成</b><span>{_esc(r["detected_at"])}</span>
+<b>时间（本地）</b><span>{_esc(_to_local(r["timestamp"]))}</span>
+<b>检测完成</b><span>{_esc(_to_local(r["detected_at"]))}</span>
 <b>tokens (p+c)</b><span>{toks}</span>
 <b>耗时 / HTTP</b><span>{r["elapsed_ms"]}ms / {r["status_code"]}</span>
 <b>结束原因</b><span>{_esc(r["finish_reason"] or "-")}</span>
@@ -424,13 +441,13 @@ def _render_html(data: dict) -> str:
     empty_note = "" if data["rows"] else '<p class="empty">时间窗口内没有符合过滤条件的检测记录。</p>'
     table_rows = "".join(
         f"<tr><td>{i}</td>"
-        f"<td>{_esc((r['timestamp'] or '')[:19].replace('T', ' '))}</td>"
+        f"<td>{_esc(_to_local(r['timestamp']))}</td>"
         f"<td>{_esc(r['service'])}</td>"
         f"<td>{_esc((r['upstream'] or '').replace('https://', '').replace('http://', '')[:30])}</td>"
         f"<td>{_esc(r['model'] or '-')}</td>"
         f"<td><span class='badge' style='background:{_STATUS_COLOR.get(r['detection_status'], '#667085')}'>{_esc(r['detection_status'])}</span></td>"
         f"<td class='risk'>{_esc(r['risk_level'] or '-')}</td>"
-        f"<td>{_esc(_detail_reason(r['detail'])[:60])}</td>"
+        f"<td>{_esc(_detail_reason(r['detail']))}</td>"
         f"<td style='font-family:ui-monospace,Consolas,monospace'>{_esc(r['record_id'][:8])}</td></tr>"
         for i, r in enumerate(data["rows"], 1)
     )
@@ -440,7 +457,7 @@ def _render_html(data: dict) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SSGC 检测报告 · {data["generated_at"][:10]}</title>
+<title>SSGC 检测报告 · {_to_local(data["generated_at"])[:10]}</title>
 <style>{_CSS}</style>
 <script>
 window.onbeforeprint=function(){{document.querySelectorAll('details').forEach(function(d){{d.open=true}})}};
@@ -450,7 +467,7 @@ window.onbeforeprint=function(){{document.querySelectorAll('details').forEach(fu
 <div class="wrap">
 <header>
 <h1>🛡️ SSGC 检测报告</h1>
-<div class="meta">生成 {data["generated_at"]} · 数据自 {data["since"]} · 结论过滤: {filters_txt}{trunc_note}</div>
+<div class="meta">生成 {_to_local(data["generated_at"])} · 数据自 {_to_local(data["since"])} · 结论过滤: {filters_txt}{trunc_note}</div>
 </header>
 <div class="cards">
 <div class="card"><div class="num">{data["total"]}</div><div class="lbl">导出条数</div></div>
@@ -460,7 +477,7 @@ window.onbeforeprint=function(){{document.querySelectorAll('details').forEach(fu
 {empty_note}
 <section class="summary">
 <h2>汇总</h2>
-<table><thead><tr><th>#</th><th>时间 (UTC)</th><th>服务</th><th>上游</th><th>模型</th><th>结论</th><th>风险</th><th>理由</th><th>ID</th></tr></thead>
+<table><thead><tr><th>#</th><th>时间（本地）</th><th>服务</th><th>上游</th><th>模型</th><th>结论</th><th>风险</th><th>理由</th><th>ID</th></tr></thead>
 <tbody>
 {table_rows}
 </tbody></table>
