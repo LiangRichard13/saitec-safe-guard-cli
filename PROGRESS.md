@@ -16,7 +16,7 @@ chat_probe.py 内嵌 PROMPTS 抽到 test_questions.json（每条带 tag），新
 
 ## 2026-08-27
 
-### feat: --help 全面增强（emoji + Examples + Troubleshooting + 白色正文） <待提交>
+### feat: --help 全面增强（emoji + Examples + Troubleshooting + 白色正文） <af32b9e>
 typer monkey-patch（`typer.rich_utils.STYLE_HELPTEXT = "white"`）解决 help 正文灰色看不清的问题。顶层 `ssgc --help` 重写为 Quick start + Documentation 双节；21 处命令 docstring 全部重写为模板化结构（🎯 emoji 简介 + 详情 + `\b` Examples + Troubleshooting + See also），覆盖 init/start/monitor/stop/restart/status/report/validate/doctor/logs/tail/redo/purge/export + config×4 + service×4。docstring 修改不影响测试（测试用 CliRunner --json）。251 pytest 全绿。
 教训: typer 默认 help 样式 `STYLE_HELPTEXT="dim"`（灰色），rich 接管渲染时正文仍按 click 默认 dim——需要 monkey-patch 内部常量，无官方 API。
 
