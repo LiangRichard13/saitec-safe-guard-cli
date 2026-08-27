@@ -5,7 +5,7 @@
 
 ## 2026-08-27
 
-### fix: export 报告时间本地化 + 判断理由去截断 <待提交>
+### fix: export 报告时间本地化 + 判断理由去截断 <affceb4>
 用户实测发现两处输出问题：①报告时间（timestamp/detected_at/generated_at）显示 UTC，本地 UTC+8 差 8 小时对不上——加 `_to_local` 帮助函数（容错 Z 后缀/naive 时区/解析失败），md+html 所有时间显示处统一转本地时区，表头「时间 (UTC)」改「时间（本地）」；②汇总表/详情摘要的 reason 硬截断 `[:60]`/`[:42]`——去除截断全量显示。另清理 `_collect_rows` 无意义三元残留。核实 mock random 模式 reason 会正常显示（store 读出来 json.loads 成 dict，`_detail_reason` 容错），导出不会出错。251 pytest 绿，真实数据导出验证时间本地化 + reason 全量。
 教训: 面向人类的报告时间一律本地时区，UTC 只在机器接口（--json / JSONL）保留；"数据层 UTC + 渲染层转本地"分层是正解。
 
