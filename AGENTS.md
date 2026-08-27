@@ -26,7 +26,7 @@ src/ssgc/                  # 六层架构，依赖只能向下（见 §3）
 ├── proxy/                   # L4：server.py（ProxyService：catch-all 转发 + 透传 + 限长）
 ├── runtime/                 # L5：runtime.py（唯一编排者：start/stop/上报循环/续传/event_sink）
 └── cli/                     # L6：main.py(typer app) _common.py(emit/视觉/PID/路径)
-                             #    _serve.py(start 的子进程入口) commands/(14 个命令一文件一命令)
+                             #    _serve.py(start 的子进程入口) commands/(15 个命令一文件一命令)
 
 tests/                       # 镜像 src 分层
 ├── test_core|test_recorder|test_reporter|test_store|test_adapters|test_proxy|test_runtime|test_cli/

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import typer
 
-from .commands import config_cmd, doctor, init, logs, monitor, purge, redo, report, restart, service_cmd, start, status, stop, tail, validate
+from .commands import config_cmd, doctor, export, init, logs, monitor, purge, redo, report, restart, service_cmd, start, status, stop, tail, validate
 
 
 def _configure_io_encoding() -> None:
@@ -79,6 +79,7 @@ app.command(name="logs")(logs.logs)
 app.command(name="tail")(tail.tail)
 app.command(name="redo")(redo.do_redo)
 app.command(name="purge")(purge.purge)
+app.command(name="export")(export.do_export)
 
 # config 子命令组（get / set / unset / list）
 app.add_typer(config_cmd.app, name="config")

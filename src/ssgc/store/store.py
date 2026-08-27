@@ -201,6 +201,7 @@ class Store:
         since: datetime,
         service: str | None = None,
         limit: int = 100,
+        status: list[str] | None = None,
     ) -> list[DetectionResult]:
         """查询检测结果（按时间倒序）
 
@@ -208,21 +209,22 @@ class Store:
             since: 起始时间
             service: 可选，按服务名过滤
             limit: 返回结果数上限
+            status: 可选，按 detection_status 过滤（SQL 层 IN——先 limit 后过滤会漏数据）
         """
         since_iso = since.isoformat()
+        clauses: list[str] = []
+        params: list[object] = [since_iso]
+        if service is not None:
+            clauses.append("AND service = ?")
+            params.append(service)
+        if status:
+            placeholders = ", ".join("?" for _ in status)
+            clauses.append(f"AND detection_status IN ({placeholders})")
+            params.extend(status)
+        tail = (" " + " ".join(clauses) if clauses else "") + " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
         with self._connect() as conn:
-            if service is not None:
-                rows = conn.execute(
-                    _QUERY_RESULTS_BASE
-                    + " AND service = ? ORDER BY timestamp DESC LIMIT ?",
-                    (since_iso, service, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    _QUERY_RESULTS_BASE
-                    + " ORDER BY timestamp DESC LIMIT ?",
-                    (since_iso, limit),
-                ).fetchall()
+            rows = conn.execute(_QUERY_RESULTS_BASE + tail, params).fetchall()
         return [self._result_to_model(r) for r in rows]
 
     async def get_cursor(self) -> ReportCursor:

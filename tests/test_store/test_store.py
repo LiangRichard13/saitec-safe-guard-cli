@@ -262,3 +262,52 @@ async def test_invalid_detection_status_rejected(db_path: Path) -> None:
     )
     with pytest.raises(sqlite3.IntegrityError):
         await store.save_results([bad])
+
+# ============================================================
+# query 的 detection_status 过滤（export 用）
+# ============================================================
+
+
+async def _seed_status_rows(store: Store) -> None:
+    await store.save_results(
+        [
+            DetectionResult(
+                record_id=f"st-{s}",
+                service="svc",
+                endpoint_type="openai-chat-completions",
+                upstream="https://api.openai.com",
+                timestamp=f"2026-08-14T10:0{i}:00Z",
+                status_code=200,
+                elapsed_ms=100,
+                detection_status=s,
+                detected_at=f"2026-08-14T10:0{i}:01Z",
+            )
+            for i, s in enumerate(["clean", "suspicious", "violation", "error"])
+        ]
+    )
+
+
+async def test_query_filter_by_status_single(db_path: Path) -> None:
+    store = Store(db_path)
+    await _seed_status_rows(store)
+    results = await store.query(since=datetime(2026, 8, 14), status=["violation"])
+    assert [r.record_id for r in results] == ["st-violation"]
+
+
+async def test_query_filter_by_status_multi(db_path: Path) -> None:
+    store = Store(db_path)
+    await _seed_status_rows(store)
+    results = await store.query(
+        since=datetime(2026, 8, 14), status=["suspicious", "violation", "error"]
+    )
+    got = {r.record_id for r in results}
+    assert got == {"st-suspicious", "st-violation", "st-error"}
+    assert "st-clean" not in got
+
+
+async def test_query_no_status_returns_all(db_path: Path) -> None:
+    """status 不传时行为不变（report 兼容）"""
+    store = Store(db_path)
+    await _seed_status_rows(store)
+    results = await store.query(since=datetime(2026, 8, 14))
+    assert len(results) == 4

@@ -59,6 +59,8 @@ ssgc validate
 
 # 检测结果与运维
 ssgc report [--since 1h|30m|7d|ISO8601] [--service NAME] [--limit N] --json
+ssgc export [-f md|html] [-o PATH] [--since 7d] [--status suspicious,violation,error|all] --json
+                                       # 导出报告（默认只导异常；含完整对话，从 JSONL 关联原文）
 ssgc redo RECORD_ID --json            # 重报单条（绕过游标）
 ssgc purge [--retention-days N] [--dry-run]   # 清 JSONL/日志备份/SQLite
 ssgc logs --tail N [--service NAME]
@@ -117,6 +119,20 @@ ssgc status --json && ssgc report --since 10m --limit 500 --json
 - **盲区兜底**：detector 401 后 CLI 故意停摆，此时 `running=true` 且 report 无 error——健康巡检时可加 `ssgc logs --tail 50` 检查有无 `X-API-Key 失效`
 - 周期建议 ≥ detector 的 `report_interval_sec`（默认 60s），否则看到的总是旧数据；持久的宿主级定时任务用 Claude Code 的 cron/Monitor 机制做，本 CLI 自身不提供调度
 - 人盯实时场景用 `ssgc monitor`（前台进程 + 事件驱动彩色输出，与 start 互斥）——它给人类看，Agent 巡检仍用上面的 JSON 组合
+
+### 4.5 导出异常报告留档
+
+发现异常后把可读报告交付给人（审计/转发/归档）：
+
+```bash
+ssgc export -f html -o violation-report.html --since 24h    # 人看/打印转 PDF
+ssgc export --json --since 24h                              # Agent 拿摘要（count/by_status/output_path）
+```
+
+要点：
+- **默认只导 suspicious/violation/error**（不含 clean）——想全量存档才显式 `--status all`
+- 报告含**完整对话**，属敏感文件：放进用户指定目录，不要主动推到外部服务；JSONL 已 purge 的条目自动标"仅结论"
+- `-o` 缺省落当前目录、文件名带时间戳——Agent 调用时总是显式给 `-o` 避免散落文件
 
 ### 5. 排错决策树
 

@@ -73,7 +73,7 @@ pip install -e ".[mock,dev]"
 
 ```bash
 ssgc --help
-# 应输出 Usage 和 14 个命令列表
+# 应输出 Usage 和 15 个命令列表
 ```
 
 ---
@@ -182,7 +182,7 @@ ssgc stop
 
 ## 4. 完整命令参考
 
-> 14 个命令分 5 类。所有命令都支持 `--config <path>`（自定义配置文件）和 `--json`（机器可读 JSON 输出；`monitor` 除外）。
+> 15 个命令分 5 类。所有命令都支持 `--config <path>`（自定义配置文件）和 `--json`（机器可读 JSON 输出；`monitor` 除外）。
 
 ### 4.1 配置类
 
@@ -368,6 +368,33 @@ ssgc purge --dry-run          # 只看不动
 - SQLite 中超期的检测记录
 
 > 日志按天自动切割（午夜），服务运行期间自动保留最近 14 天；`purge` 用于手动/更彻底的清理。
+
+#### `export` — 导出检测报告（Markdown / HTML）
+
+```bash
+ssgc export                                  # 默认：近 7 天的 suspicious/violation/error，Markdown
+ssgc export -f html -o report.html           # HTML 版（浏览器打开，可打印转 PDF）
+ssgc export --status all                     # 全量（含 clean）——存档场景
+ssgc export --status violation --since 24h   # 只导违规、近 24 小时
+ssgc export -s my-service --limit 5000       # 按服务过滤
+ssgc export --json                           # Agent 读取摘要（count/by_status/output_path）
+```
+
+参数：
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `--format / -f` | `md` | `md` 或 `html` |
+| `--output / -o` | `ssgc-report-<时间戳>.<ext>` | 输出文件路径（当前目录） |
+| `--since` | `7d` | 数据窗口起点 |
+| `--status` | `suspicious,violation,error` | 结论过滤；`all`=全量含 clean |
+| `--service / -s` | — | 按服务名过滤 |
+| `--limit / -n` | `10000` | 导出条数上限（达到时报告标注截断） |
+
+行为说明：
+- 报告含**完整对话内容**——从 JSONL 关联原文；记录已被 `purge` 清理的条目标注"仅结论"
+- **默认只导异常**（suspicious/violation/error）：clean 通常占绝大多数，全量导出会稀释重点；需要完整审计轨迹时显式 `--status all`
+- HTML 为单文件自包含（无外部依赖），异常条目默认展开、clean/error 在全量导出时折叠；`@media print` 已适配，浏览器打印即成 PDF
 
 ### 4.4 调试类
 

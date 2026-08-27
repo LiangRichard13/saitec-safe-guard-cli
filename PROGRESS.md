@@ -3,6 +3,13 @@
 > 倒序时间线。格式约定见 [AGENTS.md](AGENTS.md) §5。接手 Agent 先读本文件建立上下文。
 > 条目与 commit 一一对应；`教训:` 行是防重踩的关键。
 
+## 2026-08-27
+
+### feat: export 检测报告导出命令（md/html 双格式） <待提交>
+`ssgc export`：SQLite 结论 + JSONL 完整对话首次 join（`_load_records_bulk` 单次遍历防 O(N×M)；JSONL 缺失标注仅结论）。默认只导 suspicious/violation/error（clean 占 95%+ 会稀释重点；全量显式 `--status all`）。单份数据双渲染器保证 md/html 内容对齐；HTML 自包含、异常全展开/all 导出时 clean 折叠、onbeforeprint 展开适配打印转 PDF、全文 escape 防 XSS。store.query 加 SQL 层 status IN 过滤。+13 测试共 250 绿。
+教训: asyncio.run(_q) 少调用括号会被 CLI 的 except-emit 吞成 ok=False 静默失败——CLI 错误路径输出必须进测试断言 stdout payload，不能只看 exit code。
+
+
 ## 2026-08-26
 
 ### docs: 新增 how-it-works.md 实现原理通俗导览 <0cc1502>
