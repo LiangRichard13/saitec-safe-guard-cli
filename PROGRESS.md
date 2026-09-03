@@ -3,6 +3,12 @@
 > 倒序时间线。格式约定见 [AGENTS.md](AGENTS.md) §5。接手 Agent 先读本文件建立上下文。
 > 条目与 commit 一一对应；`教训:` 行是防重踩的关键。
 
+## 2026-09-03
+
+### feat: export HTML 报告详情卡片默认全部折叠 <d761c4b>
+Richard 反馈导出报告首屏被全部展开的详情卡片淹没——`<details>` 卡片不再输出 open 属性，默认全部折叠（顶部汇总表承担概览，逐条点击展开）；打印链路不变（onbeforeprint 自动全展开，转 PDF 不受影响）。顺修 test_export fixture 时间炸弹：种子日期硬编码 2026-08-26，随时间推移滑出 `--since 7d` 查询窗口致 8 例查空失败，改为相对运行时 now 播种。user-guide §4.3 同步。全量 251 绿。
+教训: 测试 fixture 凡涉及"相对 now 的时间窗查询"，种子时间必须相对运行时 now 计算——硬编码日期是定时炸弹，写死那天就在倒计时。
+
 ## 2026-08-27
 
 ### chore: PyPI 首发材料补齐（LICENSE/元数据/py.typed/skill 迁出 .claude） <efde220>
