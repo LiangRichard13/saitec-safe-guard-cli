@@ -397,8 +397,7 @@ def _render_html(data: dict) -> str:
         st = r["detection_status"]
         color = _STATUS_COLOR.get(st, "#667085")
         reason = _detail_reason(r["detail"])
-        # 折叠策略：全量导出时 clean/error 收起（首屏聚焦异常）；默认异常导出全开
-        open_attr = "" if (full_export and st in ("clean", "error")) else " open"
+        # 折叠策略：详情卡片默认全部折叠（汇总表给概览，点击行展开；打印时自动全展开）
         toks = "-"
         if r["prompt_tokens"] is not None or r["completion_tokens"] is not None:
             toks = f"{r['prompt_tokens'] or 0} + {r['completion_tokens'] or 0}"
@@ -407,7 +406,7 @@ def _render_html(data: dict) -> str:
             detail_json = json.dumps(r["detail"], ensure_ascii=False, indent=2)
             detail_html = f'<h3 class="sec">检测明细</h3><pre class="detail-json">{_esc(detail_json)}</pre>'
         recs.append(f"""
-<details class="rec" style="border-left-color:{color}"{open_attr}>
+<details class="rec" style="border-left-color:{color}">
 <summary>
   <span class="badge" style="background:{color}">{_esc(st)}</span>
   <span class="risk">{_esc(r["risk_level"] or "-")}</span>
@@ -512,7 +511,7 @@ def do_export(
     """📄 导出检测报告（Markdown / HTML，含完整对话）
 
     SQLite 检测结论 + JSONL 原始对话 join 后输出可读报告。HTML 自包含
-    （单文件可直接浏览器打开，含异常展开 / 打印友好样式）。
+    （单文件可直接浏览器打开，详情卡片默认折叠 / 打印时自动展开）。
 
     默认只导 suspicious / violation / error（clean 占 95%+ 会稀释重点），
     全量导出显式 `--status all`。

@@ -394,7 +394,7 @@ ssgc export --json                           # Agent 读取摘要（count/by_sta
 行为说明：
 - 报告含**完整对话内容**——从 JSONL 关联原文；记录已被 `purge` 清理的条目标注"仅结论"
 - **默认只导异常**（suspicious/violation/error）：clean 通常占绝大多数，全量导出会稀释重点；需要完整审计轨迹时显式 `--status all`
-- HTML 为单文件自包含（无外部依赖），异常条目默认展开、clean/error 在全量导出时折叠；`@media print` 已适配，浏览器打印即成 PDF
+- HTML 为单文件自包含（无外部依赖），详情卡片默认全部折叠（点击行展开；顶部汇总表提供概览）；打印时自动全展开，`@media print` 已适配，浏览器打印即成 PDF
 
 ### 4.4 调试类
 

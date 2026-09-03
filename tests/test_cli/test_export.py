@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -34,7 +35,8 @@ def _mk_result(rid: str, status: str, ts: str) -> DetectionResult:
 
 def _seed(db_path: Path) -> None:
     store = Store(db_path)
-    base = datetime(2026, 8, 26, tzinfo=timezone.utc)
+    # 相对当前时间播种：测试用 --since 7d 查询，硬编码日期会随时间推移滑出窗口
+    base = datetime.now(timezone.utc) - timedelta(days=1)
     store._init_schema()
     import asyncio
 
@@ -146,29 +148,23 @@ def test_export_html_escape_and_semantics(env: tuple) -> None:
     # XSS 转义：< 不应以原始标签出现
     assert "<script>alert" not in html_text
     assert "&lt;script&gt;" in html_text
-    # 语义结构与折叠策略（默认异常导出全展开）
+    # 语义结构与折叠策略（详情卡片默认全部折叠）
     assert 'class="badge"' in html_text
-    assert "<details" in html_text and ' open' in html_text
+    opens = re.findall(r'<details class="rec"[^>]*>', html_text)
+    assert opens and all(" open" not in t for t in opens)
     assert "suspicious、violation、error" in html_text or "suspicious,violation,error" in html_text.replace(" ", "")
 
 
-def test_export_html_full_folds_clean(env: tuple) -> None:
-    """--status all 时 clean/error 折叠（无 open 属性），异常仍展开"""
+def test_export_html_all_folded(env: tuple) -> None:
+    """--status all 全量导出时详情卡片同样默认全部折叠"""
     _, tmp = env
     out = tmp / "full.html"
     result = runner.invoke(app, ["export", "-f", "html", "--status", "all", "-o", str(out), "--since", "7d"])
     assert result.exit_code == 0
     html_text = out.read_text(encoding="utf-8")
-    clean_idx = html_text.find("9999") if False else None
-    # 简化断言：clean 记录 ID 存在；details 里存在不带 open 的 details 标签
-    assert "<details" in html_text
-    assert any(seg.startswith("<details") for seg in html_text.split("<details")[1:]) or True
-    # 更精确：解析每个 details 开标签
-    import re
-    opens = re.findall(r"<details class=\"rec\"[^>]*>", html_text)
+    opens = re.findall(r'<details class="rec"[^>]*>', html_text)
     assert len(opens) == 4
-    folded = [t for t in opens if not t.rstrip(">").endswith('" open') and " open" not in t]
-    assert len(folded) >= 1  # 至少 clean/error 有收起的
+    assert all(" open" not in t for t in opens)
 
 
 # ============================================================
