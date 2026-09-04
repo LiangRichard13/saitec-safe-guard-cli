@@ -2,8 +2,7 @@
 
 SQLite 检测结果持久化（WAL 模式 + `busy_timeout`）。
 
-⚠️ 骨架阶段已实装。SQLite 是同步 API（asyncio 直接调用，事件循环会被
-轻微阻塞但单机自用场景足够）。
+SQLite 是同步 API（asyncio 直接调用，事件循环会被轻微阻塞但单机自用场景足够）。
 """
 from __future__ import annotations
 

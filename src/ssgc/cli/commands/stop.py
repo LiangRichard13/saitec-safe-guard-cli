@@ -31,7 +31,7 @@ def _terminate(pid: int, timeout: float, config_path: Path) -> bool:
     Windows：先写 stop.flag 让 _serve.py 优雅关闭；超时再 taskkill /F。
     """
     if os.name == "nt":
-        # P1-11：写 stop flag 触发 _serve 的 watch task 优雅关闭
+        # 写 stop flag 触发 _serve 的 watch task 优雅关闭
         _stop_flag(config_path).touch()
         deadline = time.time() + timeout
         while time.time() < deadline:

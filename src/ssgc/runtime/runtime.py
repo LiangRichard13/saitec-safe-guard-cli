@@ -54,7 +54,7 @@ class Runtime:
     ) -> None:
         self._config = config
         self._sources = sources
-        # P0-7：数据目录跟随 config 所在目录（records / results.db / logs）
+        # 数据目录跟随 config 所在目录（records / results.db / logs）
         # 默认取当前工作目录的 config.json 所在目录（CLI 命令同样按 config.parent 读取）
         self._data_dir = data_dir
         self._stopped = True
@@ -114,7 +114,7 @@ class Runtime:
         if not self._stopped:
             return
         try:
-            # P0-7：数据目录跟随 config 目录（build_from 已注入）
+            # 数据目录跟随 config 目录（build_from 已注入）
             data_dir = self._data_dir or resolve_data_dir()
             data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
@@ -294,7 +294,7 @@ class Runtime:
                 )
                 backoff = min(backoff + 1, 6)
             except Exception as e:
-                # P0-5：任何意外异常（SQLite locked / store 故障等）兜底，
+                # 任何意外异常（SQLite locked / store 故障等）兜底，
                 # 不杀死后台循环
                 self._emit_event("report_error", {"kind": "UNEXPECTED", "message": str(e)})
                 logger.exception(

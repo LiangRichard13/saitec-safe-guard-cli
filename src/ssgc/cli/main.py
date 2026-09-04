@@ -1,8 +1,6 @@
 """CLI 入口 — Layer 6
 
-详见 `docs/design/saitec-safe-guard-cli-design.md` §13（13 个命令）。
-
-⚠️ 骨架阶段：13 个命令占位，业务实现在 Phase E 落地。
+详见 `docs/design/saitec-safe-guard-cli-design.md` §13。
 """
 from __future__ import annotations
 

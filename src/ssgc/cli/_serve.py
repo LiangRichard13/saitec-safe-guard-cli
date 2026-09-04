@@ -48,7 +48,7 @@ def _stop_flag_path(config_path: Path) -> Path:
 
 
 async def _watch_stop_flag(stop_event: asyncio.Event, config_path: Path) -> None:
-    """P1-11：Windows 上 signal handler 不可用，轮询 stop.flag 文件"""
+    """Windows 上 signal handler 不可用，轮询 stop.flag 文件"""
     flag = _stop_flag_path(config_path)
     while not stop_event.is_set():
         await asyncio.sleep(0.5)

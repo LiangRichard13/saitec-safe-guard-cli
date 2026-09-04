@@ -4,7 +4,7 @@
 边透传 SSE 边累积给 adapter；调用 adapter.finalize()；构造 Record 并
 recorder.enqueue()。
 
-⚠️ 已知限制：
+已知限制：
 - 请求体 / 非流式响应体有大小上限（`max_body_bytes`，默认 100MB）防 OOM
 - 上游超时通过 aiohttp.ClientTimeout 控制
 """
@@ -69,7 +69,7 @@ class ProxyService:
         self._actual_port: int = self._spec.port  # start() 后会更新为实际端口
 
     async def _read_limited(self, reader: aiohttp.StreamReader, limit: int) -> bytes:
-        """P1-12：分块读取，总字节超限抛 ValueError（防 OOM）"""
+        """分块读取，总字节超限抛 ValueError（防 OOM）"""
         chunks: list[bytes] = []
         total = 0
         while chunk := await reader.read(64 * 1024):
@@ -125,7 +125,7 @@ class ProxyService:
         # 重置 adapter 状态（每个请求独立，防止上一个请求的内容/usage 残留到下一个）
         self._adapter.reset()
 
-        # 1. 读取请求体（P1-12：分块 + 大小上限防 OOM）
+        # 1. 读取请求体（分块 + 大小上限防 OOM）
         try:
             request_body = await self._read_limited(request.content, self._max_body_bytes)
         except ValueError as e:
@@ -212,7 +212,7 @@ class ProxyService:
             )
             return response
 
-        # 非流式：读全部 body（P1-12：分块 + 上限防 OOM）
+        # 非流式：读全部 body（分块 + 上限防 OOM）
         try:
             body = await self._read_limited(upstream_resp.content, self._max_body_bytes)
         except ValueError as e:

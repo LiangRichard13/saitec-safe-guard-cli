@@ -117,7 +117,7 @@ def start_cmd(
     # 3. 启动子进程（foreground serve）
     serve_script = Path(__file__).parent.parent / "_serve.py"
     cmd = [sys.executable, str(serve_script), str(path)]
-    # P1-9：CLI 覆盖转 SSGC_* env 让子进程生效（_serve.py 走 env 覆盖）
+    # CLI 覆盖转 SSGC_* env 让子进程生效（_serve.py 走 env 覆盖）
     env_overrides: dict[str, str] = {}
     if report_interval is not None:
         env_overrides["SSGC_REPORT_INTERVAL"] = str(report_interval)
